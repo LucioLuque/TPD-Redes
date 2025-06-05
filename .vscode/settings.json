@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "handle_result.h": "c",
+        "errno.h": "c",
+        "string.h": "c",
+        "compare": "c"
+    }
+}

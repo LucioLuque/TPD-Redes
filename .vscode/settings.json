@@ -5,6 +5,9 @@
         "string.h": "c",
         "compare": "c",
         "inttypes.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "stdint.h": "c",
+        "wait.h": "c",
+        "time.h": "c"
     }
 }

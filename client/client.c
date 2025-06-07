@@ -12,7 +12,7 @@
 #include <errno.h>
 #include <sys/time.h>   // Para gettimeofday
 #include <pthread.h>
-#include <signal.h>
+
 
 #include "../handle_result/handle_result.h"
 
@@ -63,7 +63,6 @@ double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *e
 }
 
 int main(int argc, char *argv[]) {
-    signal(SIGPIPE, SIG_IGN);
     if (argc != 2) {
         fprintf(stderr, "Uso: %s <IP_SERVIDOR>\n", argv[0]);
         exit(EXIT_FAILURE);

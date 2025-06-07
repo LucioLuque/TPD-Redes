@@ -11,6 +11,7 @@
 #include <time.h>
 #include <inttypes.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #include "../handle_result/handle_result.h"
 
@@ -58,6 +59,7 @@ struct BW_result *obtener_o_crear_resultado(uint32_t id_measurement) {
 
 
 int main() {
+    signal(SIGPIPE, SIG_IGN);
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 

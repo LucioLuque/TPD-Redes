@@ -3,6 +3,8 @@
         "handle_result.h": "c",
         "errno.h": "c",
         "string.h": "c",
-        "compare": "c"
+        "compare": "c",
+        "inttypes.h": "c",
+        "in.h": "c"
     }
 }

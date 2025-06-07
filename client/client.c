@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <errno.h>
 #include <sys/time.h>   // Para gettimeofday
+#include <pthread.h>
 
 #include "../handle_result/handle_result.h"
 
@@ -18,20 +19,46 @@
 #define PORT_DOWNLOAD 20251
 #define PORT_UPLOAD 20252
 #define BUFFER_SIZE 1024
-#define NUM_CONN 10
+// #define NUM_CONN 5
 #define T 20
 
 uint32_t generate_id();
 double medir_rtt();
-uint64_t download_test(const char *server_ip, char *src_ip, char *dst_ip);
+double download_test(const char *server_ip, char *src_ip, char *dst_ip);
 void upload_test(const char *server_ip, uint32_t id);
 void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result);
-void exportar_json(uint64_t bw_down, struct BW_result resultado, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip);
+void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip);
 
-double get_time_now() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec + tv.tv_usec / 1e6;
+// double get_time_now() {
+//     struct timeval tv;
+//     gettimeofday(&tv, NULL);
+//     return tv.tv_sec + tv.tv_usec / 1e6;
+// }
+
+double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *etapa_nombre) {
+    double total = 0.0;
+    int exitos = 0;
+
+    for (int i = 1; i <= 3; i++) {
+        double rtt = medir_rtt(server_ip);
+        if (rtt >= 0) {
+            total += rtt;
+            exitos++;
+            printf("[✓] RTT %s %d: %.3f segundos\n", etapa_nombre, i, rtt);
+        } else {
+            printf("[X] Falló RTT %s %d\n", etapa_nombre, i);
+        }
+        if (i < 3) sleep(1);
+    }
+
+    if (exitos == 0) {
+        fprintf(stderr, "[X] Todas las mediciones de RTT fallaron para etapa: %s. Abortando.\n", etapa_nombre);
+        exit(1);
+    }
+
+    double promedio = total / exitos;
+    printf("[✓] RTT %s promedio: %.3f segundos\n", etapa_nombre, promedio);
+    return promedio;
 }
 
 int main(int argc, char *argv[]) {
@@ -47,19 +74,17 @@ int main(int argc, char *argv[]) {
     }
     printf("[+] Conectando al servidor %s\n", ip_servidor);
     // Paso 1: medir latencia antes de todo (fase idle)
-    sleep(1);
-    double rtt_idle = medir_rtt(ip_servidor);
-    if (rtt_idle < 0) exit(1);
+
+    double rtt_idle = medir_rtt_promedio_con_tres_intentos(ip_servidor, "idle");
 
     // Paso 2: download test
-    double rtt_down = medir_rtt(ip_servidor);
     char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
-    uint64_t total_bytes = download_test(ip_servidor, src_ip, dst_ip);
-    double bw_download_bps = (double)total_bytes * 8 / T;
+    double rtt_down = 0.0;
+    double bw_download_bps = download_test(ip_servidor, src_ip, dst_ip);
 
     // Paso 3: upload test
-    double rtt_up = medir_rtt(ip_servidor);
     uint32_t id = generate_id();
+    double rtt_up = 0.0;
     upload_test(ip_servidor, id);
 
     // Paso 4: consultar resultados
@@ -70,8 +95,16 @@ int main(int argc, char *argv[]) {
     sleep(1); // Esperar un segundo antes de consultar resultados
     consultar_resultados(ip_servidor, puerto_udp, id, &resultado);
 
+    // Calcular avg upload bps
+    double total = 0;
+    for (int i = 0; i < NUM_CONN; i++) {
+        if (resultado.conn_duration[i] > 0)
+            total += (resultado.conn_bytes[i] * 8.0) / resultado.conn_duration[i];
+    }
+    double bw_upload_bps = total / NUM_CONN; // Promedio de todas las conexiones
+
     // Paso 5: exportar en JSON por UDP
-    exportar_json(bw_download_bps, resultado, rtt_idle, rtt_down, rtt_up, src_ip, dst_ip);
+    exportar_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, dst_ip);
     return 0;
 }
 
@@ -93,7 +126,7 @@ double medir_rtt(const char *server_ip) {
     socklen_t len = sizeof(server);
 
     server.sin_family = AF_INET;
-    server.sin_port = htons(PORT_DOWNLOAD);  // UDP también usa 20251
+    server.sin_port = htons(PORT_DOWNLOAD);
     inet_pton(AF_INET, server_ip, &server.sin_addr);
 
     uint8_t probe_send[4] = {0xff, rand() % 256, rand() % 256, rand() % 256};
@@ -127,18 +160,17 @@ double medir_rtt(const char *server_ip) {
     }
 
     double rtt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec)/1e6;
-    printf("[✓] RTT: %.3f segundos\n", rtt);
-    sleep(1);
+    // printf("[✓] RTT: %.3f segundos\n", rtt);
     return rtt;
 }
 
 
 
-uint64_t download_test(const char *server_ip, char *src_ip, char *dst_ip) {
+double download_test(const char *server_ip, char *src_ip, char *dst_ip) {
     int socks[NUM_CONN];
     char buffer[BUFFER_SIZE];
     uint64_t total = 0;
-    time_t start = time(NULL);
+    struct timeval start, end;
 
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(struct sockaddr_in);
@@ -157,21 +189,39 @@ uint64_t download_test(const char *server_ip, char *src_ip, char *dst_ip) {
     inet_ntop(AF_INET, &(local_addr.sin_addr), src_ip, INET_ADDRSTRLEN);
     inet_ntop(AF_INET, &(remote_addr.sin_addr), dst_ip, INET_ADDRSTRLEN);
 
-    while (time(NULL) - start < T) {
+    gettimeofday(&start, NULL);
+    double elapsed = 0.0;
+    while (elapsed < T) {
         for (int i = 0; i < NUM_CONN; i++) {
-            int n = recv(socks[i], buffer, BUFFER_SIZE, MSG_DONTWAIT);
-            if (n > 0) total += n;
+            if (socks[i] == -1) continue; // Si el socket está cerrado, saltar
+            ssize_t n = recv(socks[i], buffer, BUFFER_SIZE, MSG_DONTWAIT);
+            if (n < 0) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    perror("[X] Error en recv");
+                    close(socks[i]);
+                    socks[i] = -1;
+                }
+            } else if (n == 0) {
+                close(socks[i]);
+                socks[i] = -1;
+            } else {
+                total += n;
+            }
         }
+        gettimeofday(&end, NULL);
+        elapsed = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
     }
+    
     for (int i = 0; i < NUM_CONN; i++) close(socks[i]);
     printf("[✓] Descarga total: %lu bytes\n", total);
-    return total;
+    double bw_bps = (double)total * 8.0 / elapsed; // Convertir a bits por segundo
+    return bw_bps;
 }
 
 void upload_test(const char *server_ip, uint32_t id) {
     char payload[BUFFER_SIZE];
     memset(payload, 'U', BUFFER_SIZE);
-    time_t start;
+    
 
     for (int i = 0; i < NUM_CONN; i++) {
         pid_t pid = fork();
@@ -190,10 +240,15 @@ void upload_test(const char *server_ip, uint32_t id) {
             header[5] = (i+1) & 0xff;
             send(sock, header, 6, 0);
 
-            start = time(NULL);
-            while (time(NULL) - start < T) {
+            struct timeval start, now;
+            gettimeofday(&start, NULL);
+            double elapsed = 0.0;
+            while (elapsed < T) {
                 send(sock, payload, BUFFER_SIZE, 0);
+                gettimeofday(&now, NULL);
+                elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
             }
+            
             close(sock);
             exit(0);
         }
@@ -257,7 +312,7 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
 }
 
 
-void exportar_json(uint64_t bw_down, struct BW_result resultado, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip) {    
+void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip) {    
     printf("\n{\n");
     printf("  \"src_ip\": \"%s\",\n", src_ip);
     printf("  \"dst_ip\": \"%s\",\n", dst_ip);
@@ -268,13 +323,7 @@ void exportar_json(uint64_t bw_down, struct BW_result resultado, double rtt_idle
     printf("  \"timestamp\": \"%s\",\n", timestamp);
     printf("  \"avg_bw_download_bps\": %lu,\n", bw_down);
 
-    // Calcular avg upload bps
-    double total = 0;
-    for (int i = 0; i < NUM_CONN; i++) {
-        if (resultado.conn_duration[i] > 0)
-            total += (resultado.conn_bytes[i] * 8.0) / resultado.conn_duration[i];
-    }
-    printf("  \"avg_bw_upload_bps\": %.0f,\n", total / NUM_CONN);
+    printf("  \"avg_bw_upload_bps\": %lu,\n", bw_up);
     printf("  \"num_conns\": %d,\n", NUM_CONN);
     printf("  \"rtt_idle\": %.3f,\n", rtt_idle);
     printf("  \"rtt_download\": %.3f,\n", rtt_down);

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define NUM_CONN 10
+#define NUM_CONN 5
 
 struct BW_result {
   uint32_t id_measurement;

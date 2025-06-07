@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
     int puerto_udp = PORT_DOWNLOAD;
     puerto_udp = PORT_DOWNLOAD;
-
+    sleep(1); // Esperar un segundo antes de consultar resultados
     consultar_resultados(ip_servidor, puerto_udp, id, &resultado);
 
     // Paso 5: exportar en JSON por UDP

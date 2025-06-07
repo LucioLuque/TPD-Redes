@@ -10,9 +10,9 @@
 #include <netinet/in.h>
 #include <stdint.h>
 #include <errno.h>
-#include <sys/time.h>   // Para gettimeofday
+#include <sys/time.h>
+#include <stdbool.h>
 #include <pthread.h>
-
 
 #include "../handle_result/handle_result.h"
 
@@ -29,12 +29,6 @@ double download_test(const char *server_ip, char *src_ip, char *dst_ip);
 void upload_test(const char *server_ip, uint32_t id);
 void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result);
 void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip);
-
-// double get_time_now() {
-//     struct timeval tv;
-//     gettimeofday(&tv, NULL);
-//     return tv.tv_sec + tv.tv_usec / 1e6;
-// }
 
 double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *etapa_nombre) {
     double total = 0.0;
@@ -62,49 +56,85 @@ double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *e
     return promedio;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Uso: %s <IP_SERVIDOR>\n", argv[0]);
-        exit(EXIT_FAILURE);
+int parseo(int argc, char *argv[], const char **ip_servidor, bool *test_rtt, bool *test_download, bool *test_upload) {
+    // Parseo de argumentos
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-rtt") == 0 && i + 1 < argc) {
+            *test_rtt = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-download") == 0 && i + 1 < argc) {
+            *test_download = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-upload") == 0 && i + 1 < argc) {
+            *test_upload = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-ip") == 0 && i + 1 < argc) {
+            *ip_servidor = argv[i + 1];
+            i++;
+        } else {
+            fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-rtt true|false] [-download true|false] [-upload true|false]\n", argv[0]);
+            return 1;
+        }
     }
 
-    const char *ip_servidor = argv[1];
-    //si esta vacia poner SERVER_IP
-    if (strlen(ip_servidor) == 0) {
-        ip_servidor = SERVER_IP;
+    if (*ip_servidor == NULL || strlen(*ip_servidor) == 0) {
+        *ip_servidor = SERVER_IP;
+    }
+    return 0;
+}
+
+
+int main(int argc, char *argv[]) {
+    const char *ip_servidor = NULL;
+    bool test_rtt = true;
+    bool test_download = true;
+    bool test_upload = true;
+
+    if (parseo(argc, argv, &ip_servidor, &test_rtt, &test_download, &test_upload) != 0) {
+        return 1; // Error en el parseo
     }
     printf("[+] Conectando al servidor %s\n", ip_servidor);
+
+    double rtt_idle = 0.0, rtt_down = 0.0, rtt_up = 0.0;
+    double bw_download_bps = 0.0, bw_upload_bps = 0.0;
+    char src_ip[INET_ADDRSTRLEN] = "0.0.0.0";
+    char dst_ip[INET_ADDRSTRLEN] = "0.0.0.0";
+    uint32_t id = 0;
+
     // Paso 1: medir latencia antes de todo (fase idle)
-
-    double rtt_idle = medir_rtt_promedio_con_tres_intentos(ip_servidor, "idle");
-
-    // Paso 2: download test
-    char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
-    double rtt_down = 0.0;
-    double bw_download_bps = download_test(ip_servidor, src_ip, dst_ip);
-
-    // Paso 3: upload test
-    uint32_t id = generate_id();
-    double rtt_up = 0.0;
-    upload_test(ip_servidor, id);
-
-    // Paso 4: consultar resultados
-    struct BW_result resultado;
-
-    int puerto_udp = PORT_DOWNLOAD;
-    puerto_udp = PORT_DOWNLOAD;
-    sleep(1); // Esperar un segundo antes de consultar resultados
-    consultar_resultados(ip_servidor, puerto_udp, id, &resultado);
-
-    // Calcular avg upload bps
-    double total = 0;
-    for (int i = 0; i < NUM_CONN; i++) {
-        if (resultado.conn_duration[i] > 0)
-            total += (resultado.conn_bytes[i] * 8.0) / resultado.conn_duration[i];
+    if (test_rtt) {
+        rtt_idle = medir_rtt_promedio_con_tres_intentos(ip_servidor, "idle");
+    } 
+    if (test_download) {
+        // Paso 2: download test
+        rtt_down = 0.0; //deberiamos calcular esto bien!!!
+        bw_download_bps = download_test(ip_servidor, src_ip, dst_ip);
     }
-    double bw_upload_bps = total / NUM_CONN; // Promedio de todas las conexiones
+    
+    if (test_upload) {
+        // Paso 3: upload test
+        id = generate_id();
+        rtt_up = 0.0; //deberiamos calcular esto bien!!!
+        upload_test(ip_servidor, id);
 
-    // Paso 5: exportar en JSON por UDP
+        // Paso 4: consultar resultados
+        struct BW_result resultado;
+        sleep(1); // Esperar un segundo antes de consultar resultados xq 
+                // el upload puede tardar un poco en completarse
+        consultar_resultados(ip_servidor, PORT_DOWNLOAD, id, &resultado);
+
+        // Calcular avg upload bps
+        double total = 0;
+        for (int i = 0; i < NUM_CONN; i++) {
+            if (resultado.conn_duration[i] > 0)
+                total += (resultado.conn_bytes[i] * 8.0) / resultado.conn_duration[i];
+        }
+        bw_upload_bps = total / NUM_CONN;
+    }
+
+    
+
+    // Paso 5: exportar el JSON, por ahora manda por prints
     exportar_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, dst_ip);
     return 0;
 }
@@ -161,11 +191,8 @@ double medir_rtt(const char *server_ip) {
     }
 
     double rtt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec)/1e6;
-    // printf("[✓] RTT: %.3f segundos\n", rtt);
     return rtt;
 }
-
-
 
 double download_test(const char *server_ip, char *src_ip, char *dst_ip) {
     int socks[NUM_CONN];
@@ -192,23 +219,64 @@ double download_test(const char *server_ip, char *src_ip, char *dst_ip) {
 
     gettimeofday(&start, NULL);
     double elapsed = 0.0;
+    // while (elapsed < T) {
+    //     for (int i = 0; i < NUM_CONN; i++) {
+    //         if (socks[i] == -1) continue; // Si el socket está cerrado, saltar
+    //         ssize_t n = recv(socks[i], buffer, BUFFER_SIZE, MSG_DONTWAIT);
+    //         if (n < 0) {
+    //             if (errno != EAGAIN && errno != EWOULDBLOCK) {
+    //                 perror("[X] Error en recv");
+    //                 close(socks[i]);
+    //                 socks[i] = -1;
+    //             }
+    //         } else if (n == 0) {
+    //             close(socks[i]);
+    //             socks[i] = -1;
+    //         } else {
+    //             total += n;
+    //         }
+    //     }
+    //     gettimeofday(&end, NULL);
+    //     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
+    // }
     while (elapsed < T) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        int maxfd = -1;
+
+        // Agregar solo sockets abiertos
         for (int i = 0; i < NUM_CONN; i++) {
-            if (socks[i] == -1) continue; // Si el socket está cerrado, saltar
-            ssize_t n = recv(socks[i], buffer, BUFFER_SIZE, MSG_DONTWAIT);
-            if (n < 0) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                    perror("[X] Error en recv");
-                    close(socks[i]);
-                    socks[i] = -1;
-                }
-            } else if (n == 0) {
-                close(socks[i]);
-                socks[i] = -1;
-            } else {
-                total += n;
+            if (socks[i] != -1) {
+                FD_SET(socks[i], &readfds);
+                if (socks[i] > maxfd) maxfd = socks[i];
             }
         }
+
+        struct timeval timeout = {0, 500000}; // 0.5s
+        int activity = select(maxfd + 1, &readfds, NULL, NULL, &timeout);
+
+        if (activity < 0 && errno != EINTR) {
+            perror("[X] select");
+            break;
+        }
+
+        for (int i = 0; i < NUM_CONN; i++) {
+            if (socks[i] != -1 && FD_ISSET(socks[i], &readfds)) {
+                ssize_t n = recv(socks[i], buffer, BUFFER_SIZE, 0);
+                if (n < 0) {
+                    perror("[X] recv");
+                    close(socks[i]);
+                    socks[i] = -1;
+                } else if (n == 0) {
+                    // conexión cerrada por el servidor
+                    close(socks[i]);
+                    socks[i] = -1;
+                } else {
+                    total += n;
+                }
+            }
+        }
+
         gettimeofday(&end, NULL);
         elapsed = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
     }
@@ -278,14 +346,14 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
         exit(EXIT_FAILURE);
     }
 
-    // Enviar el ID de medición al servidor
+    // Id al servidor
     uint32_t id_net = htonl(id_measurement);
     if (sendto(sockfd, &id_net, sizeof(id_net), 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
         perror("sendto");
         exit(EXIT_FAILURE);
     }
 
-    // Recibir los resultados
+    // Recibir del server
     len = sizeof(servaddr);
     ssize_t n = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&servaddr, &len);
     if (n < 0) {
@@ -293,14 +361,14 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
         exit(EXIT_FAILURE);
     }
 
-    // Desempaquetar
+    // Desempaquetar con la funcion de handle_result
     if (unpackResultPayload(out_result, buffer, n) < 0) {
         fprintf(stderr, "Error desempaquetando resultados\n");
         close(sockfd);
         return;
     }
 
-    // Imprimir los resultados
+    // por ahora imprimir para verificar
     printf("Resultados de medición ID %u:\n", out_result->id_measurement);
     for (int i = 0; i < NUM_CONN; i++) {
         if (out_result->conn_duration[i] > 0) {

@@ -206,4 +206,81 @@
 // }
 
 
-//FRANNY (NO MODIFIQUÉ LO DE ARRIBA POR LAS DUDAS DE QUE ESTO ESTÉ MAL):
+//FRANNY 
+
+// void *udp_server_thread(void *arg) {
+//     (void)arg;
+//     int sock = socket(AF_INET, SOCK_DGRAM, 0);
+//     struct sockaddr_in serv, cli;
+//     socklen_t len = sizeof(cli);
+//     char buffer[512];
+
+//     serv.sin_family = AF_INET;
+//     serv.sin_port = htons(PORT_DOWNLOAD);
+//     serv.sin_addr.s_addr = INADDR_ANY;
+//     bind(sock, (struct sockaddr*)&serv, sizeof(serv));
+
+//     // Timeout de 23 segundos
+//     struct timeval tv = {T+3, 0}; 
+//     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+//     printf("[+] UDP servidor escuchando en puerto %d\n", PORT_DOWNLOAD);
+
+//     while (1) {
+//         int n = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&cli, &len);
+//         if (n < 0) {
+//             if (errno == EWOULDBLOCK || errno == EAGAIN) {
+//                 printf("[!] Timeout UDP: no se recibió nada en 23 segundos, cerrando UDP server\n");
+                
+//                 close(sock);
+
+//                 // pthread_mutex_lock(&resultados_mutex);
+//                 // pthread_mutex_unlock(&resultados_mutex);
+
+//                 // Terminar el thread para que no siga corriendo
+//                 pthread_exit(NULL);
+//             } else {
+//                 perror("[X] Error en recvfrom");
+//                 // En caso de error fatal, cerrar socket y terminar
+//                 close(sock);
+//                 pthread_exit(NULL);
+//             }
+//         }
+
+//         // Aquí sigue el procesamiento normal de paquetes
+//         if (n == 4 && (unsigned char)buffer[0] == 0xff) {
+//             printf("[✓] Eco RTT recibido, respondiendo con los mismos 4 bytes\n");
+//             sendto(sock, buffer, 4, 0, (struct sockaddr*)&cli, len);
+//         }
+//         else if (n == 5 && (unsigned char)buffer[0] == 0xfe) {
+//             uint32_t id;
+//             memcpy(&id, &buffer[1], 4);
+//             id = ntohl(id);
+//             printf("[×] Cliente indicó cierre para ID 0x%x\n", id);
+//         }
+//         else if (n == 4) {
+//             uint32_t id;
+//             memcpy(&id, buffer, 4);
+//             id = ntohl(id);
+//             printf("[?] Consulta recibida para ID 0x%x\n", id);
+//             pthread_mutex_lock(&resultados_mutex);
+//             struct ResultadoEntry *r = resultados;
+//             while (r && r->result.id_measurement != id) r = r->next;
+//             pthread_mutex_unlock(&resultados_mutex);
+//             if (r) {
+//                 printf("[✓] ID encontrado. Enviando resultados\n");
+//                 char response[10240];
+//                 int resp_size = packResultPayload(r->result, response, sizeof(response));
+//                 if (resp_size > 0) {
+//                     sendto(sock, response, resp_size, 0, (struct sockaddr*)&cli, len);
+//                 } else {
+//                     fprintf(stderr, "[X] Error al empaquetar resultados. Buffer insuficiente o error en datos.\n");
+//                 }       
+//             } else {
+//                 printf("[!] ID 0x%x no encontrado\n", id);
+//             }
+//         }
+//     }
+//     return NULL;
+// }
+

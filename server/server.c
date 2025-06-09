@@ -18,7 +18,7 @@
 #define PORT_DOWNLOAD 20251
 #define PORT_UPLOAD 20252
 #define MAX_CLIENTS 100
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4028
 #define T 20  // segundos
 
 
@@ -190,7 +190,7 @@ void *handle_upload_conn(void *arg) {
         double elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
         if (elapsed >= T) break;  // Si ya pasaron T segundos se cierra
     }
-    if (id_conn > 0 && id_conn <= NUM_CONN) {
+    if (id_conn > 0 && id_conn <= NUM_CONN_MAX) {
         double duration = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
         res->conn_bytes[id_conn - 1] = total_bytes;
         res->conn_duration[id_conn - 1] = duration;
@@ -208,7 +208,7 @@ void *udp_server_thread(void *arg) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in serv, cli;
     socklen_t len = sizeof(cli);
-    char buffer[512];
+    char buffer[BUFFER_SIZE];
 
     serv.sin_family = AF_INET;
     serv.sin_port = htons(PORT_DOWNLOAD);

@@ -128,7 +128,11 @@ void hexdump(void *mem, unsigned int len);
 
 void printBwResult(struct BW_result bw_result) {
   printf("id 0x%x\n", bw_result.id_measurement);
-  for (int i=0; i< NUM_CONN; i++) {
+  for (int i=0; i< NUM_CONN_MAX; i++) {
+    if (bw_result.conn_duration[i] <= 0) {
+      /* No data for this connection */
+      continue;
+    }
     printf("conn %2d  %20ld bytes %.3f seconds\n", i, bw_result.conn_bytes[i], bw_result.conn_duration[i]);
   }
 }
@@ -145,7 +149,7 @@ int packResultPayload(struct BW_result bw_result, void *buffer, int buffer_size)
   // size: NUM_CONN*(20+1+6+1) + 4  
   //    if NUM_CONN = 10:   284
   // Large enough temporary buffer
-  char my_buffer[500];
+  char my_buffer[10240];
   memset(my_buffer, 0, sizeof(my_buffer));
   
   // Pack id
@@ -154,7 +158,7 @@ int packResultPayload(struct BW_result bw_result, void *buffer, int buffer_size)
   bytes_temp_buffer += sizeof(netorder_id);
 
   // Pack each connection measurement
-  for (int i=0; i<NUM_CONN; i++) {
+  for (int i=0; i<NUM_CONN_MAX; i++) {
     char aux[20];
     int  n_aux;
     memset(aux, 0 , sizeof(aux));
@@ -191,7 +195,7 @@ int unpackResultPayload(struct BW_result *bw_result, void *buffer, int buffer_si
   offset += sizeof(netorder_id);
 
   // Unpack each connection measurement
-  for (int i = 0; i < NUM_CONN; i++) {
+  for (int i = 0; i < NUM_CONN_MAX; i++) {
     if (offset >= buffer_size) {
       /* Not enough data */
       return E_NOT_ENOUGH_DATA; 

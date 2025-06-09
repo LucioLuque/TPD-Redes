@@ -16,11 +16,13 @@
 
 #include "../handle_result/handle_result.h"
 
+// #define SERVER_IP "192.168.0.15"
 #define SERVER_IP "127.0.0.1"
 #define PORT_DOWNLOAD 20251
 #define PORT_UPLOAD 20252
 #define BUFFER_SIZE 1024
-// #define NUM_CONN 5
+int NUM_CONN = 5; 
+
 #define T 20
 
 uint32_t generate_id();
@@ -71,8 +73,18 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *test_rtt, boo
         } else if (strcmp(argv[i], "-ip") == 0 && i + 1 < argc) {
             *ip_servidor = argv[i + 1];
             i++;
+        } else if (strcmp(argv[i], "-conn") == 0 && i + 1 < argc) {
+            int conn = atoi(argv[i + 1]);
+            if (conn > 0 && conn <= NUM_CONN_MAX) {
+                NUM_CONN = conn;
+                printf("se lleno");
+            } else {
+                fprintf(stderr, "[X] Número de conexiones inválido. Debe ser entre 1 y %d.\n", NUM_CONN_MAX);
+                return 1;
+            }
+            i++;
         } else {
-            fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-rtt true|false] [-download true|false] [-upload true|false]\n", argv[0]);
+            fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-rtt true|false] [-download true|false] [-upload true|false] [-conn <NUM_CONN>]\n", argv[0]);
             return 1;
         }
     }
@@ -90,9 +102,15 @@ int main(int argc, char *argv[]) {
     bool test_download = true;
     bool test_upload = true;
 
-    if (parseo(argc, argv, &ip_servidor, &test_rtt, &test_download, &test_upload) != 0) {
+    if (parseo(argc, argv, &ip_servidor, &test_rtt, &test_download, &test_upload)) {    
         return 1; // Error en el parseo
     }
+    //imprimir todos los campos de parseo
+    printf("IP del servidor: %s\n", ip_servidor);
+    printf("Test de RTT: %s\n", test_rtt ? "Habilitado" : "Deshabilitado");
+    printf("Test de descarga: %s\n", test_download ? "Habilitado" : "Deshabilitado");
+    printf("Test de subida: %s\n", test_upload ? "Habilitado" : "Deshabilitado");
+    printf("Número de conexiones: %d\n", NUM_CONN);
     printf("[+] Conectando al servidor %s\n", ip_servidor);
 
     double rtt_idle = 0.0, rtt_down = 0.0, rtt_up = 0.0;
@@ -330,7 +348,7 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
     struct sockaddr_in servaddr;
     int sockfd;
     socklen_t len;
-    char buffer[2048];
+    char buffer[1024];
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {

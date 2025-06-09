@@ -3,12 +3,12 @@
 
 #include <stdint.h>
 
-#define NUM_CONN 5
+#define NUM_CONN_MAX 100
 
 struct BW_result {
   uint32_t id_measurement;
-  uint64_t conn_bytes[NUM_CONN];
-  double conn_duration[NUM_CONN];
+  uint64_t conn_bytes[NUM_CONN_MAX];
+  double conn_duration[NUM_CONN_MAX];
 };
 
 void printBwResult(struct BW_result bw_result);

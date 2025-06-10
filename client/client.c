@@ -41,12 +41,12 @@ double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *e
         
         total += rtt;
            
-        printf("[✓] RTT %s %d: %.3f segundos\n", etapa_nombre, i, rtt);
+        printf("[✓] RTT %s %d: %.4f segundos\n", etapa_nombre, i, rtt);
         if (i < 3) sleep(1);
     }
 
     double promedio = total / 3.0;
-    printf("[✓] RTT %s promedio: %.3f segundos\n", etapa_nombre, promedio);
+    printf("[✓] RTT %s promedio: %.4f segundos\n", etapa_nombre, promedio);
     return promedio;
 }
 
@@ -424,12 +424,12 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
     printf("  \"avg_bw_download_bps\": %lu,\n", bw_down);
     printf("  \"avg_bw_upload_bps\": %lu,\n", bw_up);
     printf("  \"num_conns\": %d,\n", NUM_CONN);
-    printf("  \"rtt_idle\": %.3f,\n", rtt_idle);
-    printf("  \"rtt_download\": %.3f,\n", rtt_down);
-    printf("  \"rtt_upload\": %.3f\n", rtt_up);
+    printf("  \"rtt_idle\": %.4f,\n", rtt_idle);
+    printf("  \"rtt_download\": %.4f,\n", rtt_down);
+    printf("  \"rtt_upload\": %.4f\n", rtt_up);
     printf("}\n\n");
 
-    char json_buffer[512];
+    char json_buffer[1024];
     int len = snprintf(json_buffer, sizeof(json_buffer),
         "{\n"
         "  \"src_ip\": \"%s\",\n"
@@ -438,9 +438,9 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
         "  \"avg_bw_download_bps\": %lu,\n"
         "  \"avg_bw_upload_bps\": %lu,\n"
         "  \"num_conns\": %d,\n"
-        "  \"rtt_idle\": %.3f,\n"
-        "  \"rtt_download\": %.3f,\n"
-        "  \"rtt_upload\": %.3f\n"
+        "  \"rtt_idle\": %.4f,\n"
+        "  \"rtt_download\": %.4f,\n"
+        "  \"rtt_upload\": %.4f\n"
         "}\n",
         src_ip, dst_ip, timestamp, bw_down, bw_up, NUM_CONN, rtt_idle, rtt_down, rtt_up);
 

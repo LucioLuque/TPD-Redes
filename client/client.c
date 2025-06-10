@@ -102,7 +102,8 @@ int main(int argc, char *argv[]) {
     bool test_upload = true;
     const char *json_ip = NULL;
     
-    srandom(time(NULL));
+    // srandom(time(NULL));
+    srandom((unsigned)time(NULL) ^ (unsigned)getpid());
 
     if (parseo(argc, argv, &ip_servidor, &idle, &test_download, &test_upload, &json_ip) != 0) {    
         return 1; // Error en el parseo

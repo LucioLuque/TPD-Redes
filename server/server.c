@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #include "../handle_result/handle_result.h"
 
@@ -56,7 +57,10 @@ struct BW_result *obtener_o_crear_resultado(uint32_t id_measurement) {
     return &nuevo->result;
 }
 
-
+struct thread_arg_t {
+    int client_sock;
+    struct sockaddr_in client_addr;
+};
 
 int main() {
     signal(SIGPIPE, SIG_IGN);
@@ -69,22 +73,38 @@ int main() {
         perror("socket"); exit(EXIT_FAILURE);
     }
 
-    int opt = 1;
-    setsockopt(tcp_sock_down, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    setsockopt(tcp_sock_up, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    int yes = 1;
+    if (setsockopt(tcp_sock_down, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ||
+        setsockopt(tcp_sock_up, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+        perror("setsockopt"); exit(EXIT_FAILURE);
+    }
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     // TCP Download
     server_addr.sin_port = htons(PORT_DOWNLOAD);
-    bind(tcp_sock_down, (struct sockaddr*)&server_addr, sizeof(server_addr));
-    listen(tcp_sock_down, MAX_CLIENTS);
+    if (bind(tcp_sock_down, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Error en bind de download");
+        return 1;
+    }
+
+    if (listen(tcp_sock_down, MAX_CLIENTS) < 0) {
+        perror("Error en listen de download");
+        return 1;
+    }
 
     // TCP Upload
     server_addr.sin_port = htons(PORT_UPLOAD);
-    bind(tcp_sock_up, (struct sockaddr*)&server_addr, sizeof(server_addr));
-    listen(tcp_sock_up, MAX_CLIENTS);
+    if (bind(tcp_sock_up, (struct sockaddr*)&server_addr, sizeof(server_addr))<0) {
+        perror("Error en bind de upload");
+        return 1;
+    }
+    
+    if (listen(tcp_sock_up, MAX_CLIENTS) < 0) {
+        perror("Error en listen de upload");
+        return 1;
+    }
 
     // UDP server thread
     pthread_t udp_tid;
@@ -106,15 +126,16 @@ int main() {
         if (FD_ISSET(tcp_sock_down, &read_fds)) {
             struct sockaddr_in client;
             socklen_t len = sizeof(client);
-            // int client_sock = accept(tcp_sock_down, (struct sockaddr*)&client, &len);
-            // pthread_t tid;
-            // int *arg = malloc(sizeof(int)); *arg = client_sock;
-            // pthread_create(&tid, NULL, handle_download_conn, arg);
             int client_sock = accept(tcp_sock_down, (struct sockaddr*)&client, &len);
             pthread_t tid;
-            int *arg = malloc(sizeof(int) + sizeof(struct sockaddr_in));
-            memcpy(arg, &client_sock, sizeof(int));
-            memcpy((char*)arg + sizeof(int), &client, sizeof(struct sockaddr_in));
+
+            // int *arg = malloc(sizeof(int) + sizeof(struct sockaddr_in));
+            // memcpy(arg, &client_sock, sizeof(int));
+            // memcpy((char*)arg + sizeof(int), &client, sizeof(struct sockaddr_in));
+            // pthread_create(&tid, NULL, handle_download_conn, arg);
+            struct thread_arg_t *arg = malloc(sizeof(struct thread_arg_t));
+            arg->client_sock = client_sock;
+            arg->client_addr = client;
             pthread_create(&tid, NULL, handle_download_conn, arg);
         }
 
@@ -127,15 +148,14 @@ int main() {
             pthread_create(&tid, NULL, handle_upload_conn, arg);
         }
     }
+    
     return 0;
 }
 
 void *handle_download_conn(void *arg) {
-    int sock = *(int*)arg;
-    struct sockaddr_in client_addr;
-
-    memcpy(&sock, arg, sizeof(int));
-    memcpy(&client_addr, (char*)arg + sizeof(int), sizeof(struct sockaddr_in));
+    struct thread_arg_t *args = (struct thread_arg_t *)arg;
+    int sock = args->client_sock;
+    struct sockaddr_in client_addr = args->client_addr;
     free(arg);
 
     char client_ip[INET_ADDRSTRLEN];
@@ -209,6 +229,8 @@ void *udp_server_thread(void *arg) {
     struct sockaddr_in serv, cli;
     socklen_t len = sizeof(cli);
     char buffer[BUFFER_SIZE];
+    bool found;
+    struct BW_result tmp_result;
 
     serv.sin_family = AF_INET;
     serv.sin_port = htons(PORT_DOWNLOAD);
@@ -226,14 +248,24 @@ void *udp_server_thread(void *arg) {
             memcpy(&id, buffer, 4);
             id = ntohl(id);
             printf("[?] Consulta recibida para ID 0x%x\n", id);
+            
+           
+            found = false;
+
             pthread_mutex_lock(&resultados_mutex);
             struct ResultadoEntry *r = resultados;
             while (r && r->result.id_measurement != id) r = r->next;
-            pthread_mutex_unlock(&resultados_mutex);
+            // pthread_mutex_unlock(&resultados_mutex);
             if (r) {
+                tmp_result = r->result;
+                found = true;
+            }
+            pthread_mutex_unlock(&resultados_mutex);
+            if (found) {
+
                 printf("[✓] ID encontrado. Enviando resultados\n");
                 char response[10240];
-                int resp_size = packResultPayload(r->result, response, sizeof(response));
+                int resp_size = packResultPayload(tmp_result, response, sizeof(response));
                 sendto(sock, response, resp_size, 0, (struct sockaddr*)&cli, len);
             }
             else {
@@ -241,5 +273,6 @@ void *udp_server_thread(void *arg) {
             }
         }
     }
+    close(sock);
     return NULL;
 }

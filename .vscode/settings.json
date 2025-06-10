@@ -8,6 +8,7 @@
         "in.h": "c",
         "stdint.h": "c",
         "wait.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "pthread.h": "c"
     }
 }

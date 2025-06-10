@@ -16,9 +16,8 @@
 
 #include "../handle_result/handle_result.h"
 
+
 #define SERVER_IP "127.0.0.1"
-#define PORT_DOWNLOAD 20251
-#define PORT_UPLOAD 20252
 #define JSON_PORT 9999
 int NUM_CONN = 10; 
 
@@ -86,9 +85,7 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
     }
 
     return 0;
-    
 }
-
 
 int main(int argc, char *argv[]) {
     const char *ip_servidor = NULL;
@@ -96,7 +93,6 @@ int main(int argc, char *argv[]) {
     bool test_download = true;
     bool test_upload = true;
     
-    // srandom(time(NULL));
     srandom((unsigned)time(NULL) ^ (unsigned)getpid());
 
     if (parseo(argc, argv, &ip_servidor, &idle, &test_download, &test_upload) != 0) {    
@@ -322,13 +318,12 @@ double download_test(const char *server_ip, char *src_ip) {
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(server);
 
-    // 1) Prepara la dirección del servidor
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_port   = htons(PORT_DOWNLOAD);
     inet_pton(AF_INET, server_ip, &server.sin_addr);
 
-    // 2) Para cada conexión: crea pipe, socket + fork
+    // Para cada conexión: crea pipe, socket + fork
     for (int i = 0; i < NUM_CONN; i++) {
         if (pipe(pipes[i]) < 0) {
             perror("pipe");
@@ -346,7 +341,7 @@ double download_test(const char *server_ip, char *src_ip) {
         }
 
         if ((pids[i] = fork()) == 0) {
-            // --- HIJO i ---
+            // hijo i
             close(pipes[i][0]);    // cierra lectura
             uint64_t total_i = 0;
             char buf[DATA_BUFFER_SIZE];
@@ -371,13 +366,13 @@ double download_test(const char *server_ip, char *src_ip) {
             close(sock);
             exit(0);
         } else {
-            // --- PADRE ---
+            // padre
             close(pipes[i][1]);   // cierra escritura
             close(sock);          // padre no usa este socket
         }
     }
 
-    // 3) El padre mide el tiempo total
+    // El padre mide el tiempo total
     struct timeval start_all, end_all;
     gettimeofday(&start_all, NULL);
 
@@ -389,7 +384,7 @@ double download_test(const char *server_ip, char *src_ip) {
     double elapsed = (end_all.tv_sec  - start_all.tv_sec)
                    + (end_all.tv_usec - start_all.tv_usec) / 1e6;
 
-    // 4) Suma los bytes llegados de cada hijo
+    // Suma los bytes llegados de cada hijo
     uint64_t total = 0;
     for (int i = 0; i < NUM_CONN; i++) {
         uint64_t part = 0;
@@ -399,9 +394,7 @@ double download_test(const char *server_ip, char *src_ip) {
         total += part;
     }
 
-    // 5) Obtener src_ip como antes del primer socket
-    //    (puedes reutilizar un socket temporal o simplemente usar server_ip)
-    //    Aquí lo dejamos igual que antes:
+    //obtener src_ip de la conexión
     {
       int tmp = socket(AF_INET, SOCK_STREAM, 0);
       struct sockaddr_in local;

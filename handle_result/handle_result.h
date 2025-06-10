@@ -12,6 +12,8 @@
 
 #define DATA_BUFFER_SIZE 4096 //
 #define T 20  // segundos
+#define PORT_DOWNLOAD 20251
+#define PORT_UPLOAD 20252
 
 struct BW_result {
   uint32_t id_measurement;

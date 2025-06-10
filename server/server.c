@@ -16,8 +16,6 @@
 
 #include "../handle_result/handle_result.h"
 
-#define PORT_DOWNLOAD 20251
-#define PORT_UPLOAD 20252
 #define MAX_CLIENTS 100
 
 // Estructura para almacenar resultados de medicion

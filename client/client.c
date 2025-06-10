@@ -245,9 +245,7 @@ double download_test(const char *server_ip, char *src_ip){ //char *dst_ip) {
     
     struct sockaddr_in local_addr; //, remote_addr;
     getsockname(socks[0], (struct sockaddr *)&local_addr, &addr_len);
-    // getpeername(socks[0], (struct sockaddr *)&remote_addr, &addr_len);
     inet_ntop(AF_INET, &(local_addr.sin_addr), src_ip, INET_ADDRSTRLEN);
-    // inet_ntop(AF_INET, &(remote_addr.sin_addr), dst_ip, INET_ADDRSTRLEN);
 
     gettimeofday(&start, NULL);
     double elapsed = 0.0;

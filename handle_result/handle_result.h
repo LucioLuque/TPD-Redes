@@ -3,7 +3,15 @@
 
 #include <stdint.h>
 
-#define NUM_CONN_MAX 100
+// estas variables deberian ir en otro archivo comun
+//  server, client  y hanlde_result porq aca muhco que no va
+#define NUM_CONN_MAX 10
+#define RESULT_BUFFER_SIZE  (sizeof(uint32_t) + \
+                             NUM_CONN_MAX*(20+1+6+1))
+
+
+#define DATA_BUFFER_SIZE 4096 //
+#define T 20  // segundos
 
 struct BW_result {
   uint32_t id_measurement;

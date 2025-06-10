@@ -19,10 +19,13 @@
 #define PORT_DOWNLOAD 20251
 #define PORT_UPLOAD 20252
 #define MAX_CLIENTS 100
+// #define BUFFER_SIZE 4028
+#define T 20  // segundos
+
 
 // Estructura para almacenar resultados de medicion
 struct ResultadoEntry {
-    struct BW_result result;
+    struct BW_result *result;
     struct ResultadoEntry *next;
 };
 
@@ -38,20 +41,36 @@ struct BW_result *obtener_o_crear_resultado(uint32_t id_measurement) {
     pthread_mutex_lock(&resultados_mutex);
     struct ResultadoEntry *actual = resultados;
     while (actual) {
-        if (actual->result.id_measurement == id_measurement) {
+        if (actual->result->id_measurement == id_measurement) {
             pthread_mutex_unlock(&resultados_mutex);
-            return &actual->result;
+            return actual->result;
         }
         actual = actual->next;
     }
-    struct ResultadoEntry *nuevo = malloc(sizeof(struct ResultadoEntry));
-    nuevo->result.id_measurement = id_measurement;
-    memset(nuevo->result.conn_bytes, 0, sizeof(nuevo->result.conn_bytes));
-    memset(nuevo->result.conn_duration, 0, sizeof(nuevo->result.conn_duration));
+    struct ResultadoEntry *nuevo = malloc(sizeof(*nuevo));
+    if (!nuevo) {
+        pthread_mutex_unlock(&resultados_mutex);
+        perror("Error al crear nueva entrada de resultado");
+        return NULL;
+    }
+
+    struct BW_result *res = create_bw_result();
+    if (!res) {
+        free(nuevo);
+        pthread_mutex_unlock(&resultados_mutex);
+        perror("Error al crear BW_result");
+        return NULL;
+    }
+
+    res->id_measurement = id_measurement;
+    memset(res->conn_bytes, 0, sizeof(res->conn_bytes));
+    memset(res->conn_duration, 0, sizeof(res->conn_duration));
+
+    nuevo->result = res;
     nuevo->next = resultados;
     resultados = nuevo;
     pthread_mutex_unlock(&resultados_mutex);
-    return &nuevo->result;
+    return res;
 }
 
 struct thread_arg_t {
@@ -77,7 +96,7 @@ int main() {
     }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY; // lo estamos ahciendo de otra manera a ellos
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
     // TCP Download
     server_addr.sin_port = htons(PORT_DOWNLOAD);
@@ -126,6 +145,10 @@ int main() {
             int client_sock = accept(tcp_sock_down, (struct sockaddr*)&client, &len);
             pthread_t tid;
 
+            // int *arg = malloc(sizeof(int) + sizeof(struct sockaddr_in));
+            // memcpy(arg, &client_sock, sizeof(int));
+            // memcpy((char*)arg + sizeof(int), &client, sizeof(struct sockaddr_in));
+            // pthread_create(&tid, NULL, handle_download_conn, arg);
             struct thread_arg_t *arg = malloc(sizeof(struct thread_arg_t));
             arg->client_sock = client_sock;
             arg->client_addr = client;
@@ -155,22 +178,20 @@ void *handle_download_conn(void *arg) {
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
 
-    char buffer[DATA_BUFFER_SIZE];
-    memset(buffer, 'D', DATA_BUFFER_SIZE);
-
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 'D', BUFFER_SIZE);
     struct timeval start, now;
     gettimeofday(&start, NULL);
     double elapsed = 0.0;
-
     while (elapsed < T + 3) {
-        ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
+        ssize_t sent = send(sock, buffer, BUFFER_SIZE, 0);
         if (sent <= 0) break;  // error o cliente cerro conexion
 
         gettimeofday(&now, NULL);
         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
 
         // Si pasaron T segundos y no se envio nada, se cierra
-        // if (elapsed >= T) break;
+        if (elapsed >= T && sent == 0) break;
     }
     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
     close(sock);
@@ -192,12 +213,12 @@ void *handle_upload_conn(void *arg) {
 
     struct BW_result *res = obtener_o_crear_resultado(id_measurement);
 
-    char buffer[DATA_BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
     struct timeval start, now;
     gettimeofday(&start, NULL);
     uint64_t total_bytes = 0;
     while (1) {
-        int n = recv(sock, buffer, DATA_BUFFER_SIZE, 0);
+        int n = recv(sock, buffer, BUFFER_SIZE, 0);
         if (n <= 0) break;
         total_bytes += n;
 
@@ -223,35 +244,22 @@ void *udp_server_thread(void *arg) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in serv, cli;
     socklen_t len = sizeof(cli);
-    char buffer[DATA_BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
     bool found;
     struct BW_result tmp_result;
-    int n;
 
     serv.sin_family = AF_INET;
     serv.sin_port = htons(PORT_DOWNLOAD);
     serv.sin_addr.s_addr = INADDR_ANY;
-    if (bind(sock, (struct sockaddr*)&serv, sizeof(serv)) < 0) {
-        perror("bind UDP");
-        close(sock);
-        return NULL;
-    }
+    bind(sock, (struct sockaddr*)&serv, sizeof(serv));
 
     printf("[+] UDP servidor escuchando en puerto %d\n", PORT_DOWNLOAD);
 
     while (1) {
-        n = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&cli, &len);
-        if (n < 0) {
-            perror("recvfrom");
-            continue;
-        }
-        // RTT
+        int n = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&cli, &len);
         if (n == 4 && (unsigned char)buffer[0] == 0xff) {
             sendto(sock, buffer, 4, 0, (struct sockaddr*)&cli, len);
-            continue;
-        }
-        //consultar resultados
-        if (n == 4) {
+        } else if (n == 4) {
             uint32_t id;
             memcpy(&id, buffer, 4);
             id = ntohl(id);
@@ -272,23 +280,14 @@ void *udp_server_thread(void *arg) {
             if (found) {
 
                 printf("[✓] ID encontrado. Enviando resultados\n");
-                char response[RESULT_BUFFER_SIZE];
+                char response[10240];
                 int resp_size = packResultPayload(tmp_result, response, sizeof(response));
                 sendto(sock, response, resp_size, 0, (struct sockaddr*)&cli, len);
             }
             else {
-                // No se encontro el ID
-                fprintf(stderr,
-                    "[!] ID no encontrado: 0x%x (largo=%d, primer_byte=0x%02x)\n",
-                    id, n, (unsigned char)buffer[0]);
+                printf("[!] ID 0x%x no encontrado\n", id);
             }
-            continue;
         }
-
-        //cualquier otro caso es invalido
-        fprintf(stderr,
-        "[!] UDP inválido: largo=%d, primer_byte=0x%02x\n", n, (n>0 ? (unsigned char)buffer[0] : 0));
-        
     }
     close(sock);
     return NULL;

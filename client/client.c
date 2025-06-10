@@ -124,16 +124,28 @@ int main(int argc, char *argv[]) {
     // Paso 1: medir latencia antes de todo (fase idle)
     if (idle) {
         rtt_idle = medir_rtt_promedio_con_tres_intentos(ip_servidor, "idle");
+        if (rtt_idle < 0) {
+            fprintf(stderr, "[X] Error al medir RTT idle. Abortando.\n");
+            return 1; // Error en la medición de RTT
+        }
     } 
     if (test_download) {
         // Paso 2: download test
         rtt_down = medir_rtt_promedio_con_tres_intentos(ip_servidor, "download");
+        if (rtt_down < 0) {
+            fprintf(stderr, "[X] Error al medir RTT download. Abortando.\n");
+            return 1; // Error en la medición de RTT
+        }
         bw_download_bps = download_test(ip_servidor, src_ip); //, dst_ip);
     }
     
     if (test_upload) {
         // Paso 3: upload test
         rtt_up = medir_rtt_promedio_con_tres_intentos(ip_servidor, "upload");
+        if (rtt_up < 0) {
+            fprintf(stderr, "[X] Error al medir RTT upload. Abortando.\n");
+            return 1; // Error en la medición de RTT
+        }
         id = generate_id();
         upload_test(ip_servidor, id);
 

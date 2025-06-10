@@ -226,95 +226,196 @@ double medir_rtt(const char *server_ip) {
     return rtt;
 }
 
-double download_test(const char *server_ip, char *src_ip){ //char *dst_ip) {
-    int socks[NUM_CONN];
-    char buffer[DATA_BUFFER_SIZE];
-    uint64_t total = 0;
-    struct timeval start, end;
+// double download_test(const char *server_ip, char *src_ip){ //char *dst_ip) {
+//     int socks[NUM_CONN];
+//     char buffer[DATA_BUFFER_SIZE];
+//     uint64_t total = 0;
+//     struct timeval start, end;
 
-    struct sockaddr_in server;
-    socklen_t addr_len = sizeof(struct sockaddr_in);
-    for (int i = 0; i < NUM_CONN; i++) {
-        socks[i] = socket(AF_INET, SOCK_STREAM, 0);
-        memset(&server, 0, sizeof(server));
-        server.sin_family = AF_INET;
-        server.sin_port = htons(PORT_DOWNLOAD);
-        inet_pton(AF_INET, server_ip, &server.sin_addr);
-        connect(socks[i], (struct sockaddr*)&server, sizeof(server));
-    }
+//     struct sockaddr_in server;
+//     socklen_t addr_len = sizeof(struct sockaddr_in);
+//     for (int i = 0; i < NUM_CONN; i++) {
+//         socks[i] = socket(AF_INET, SOCK_STREAM, 0);
+//         memset(&server, 0, sizeof(server));
+//         server.sin_family = AF_INET;
+//         server.sin_port = htons(PORT_DOWNLOAD);
+//         inet_pton(AF_INET, server_ip, &server.sin_addr);
+//         connect(socks[i], (struct sockaddr*)&server, sizeof(server));
+//     }
     
-    struct sockaddr_in local_addr; //, remote_addr;
-    getsockname(socks[0], (struct sockaddr *)&local_addr, &addr_len);
-    inet_ntop(AF_INET, &(local_addr.sin_addr), src_ip, INET_ADDRSTRLEN);
+//     struct sockaddr_in local_addr; //, remote_addr;
+//     getsockname(socks[0], (struct sockaddr *)&local_addr, &addr_len);
+//     inet_ntop(AF_INET, &(local_addr.sin_addr), src_ip, INET_ADDRSTRLEN);
 
-    gettimeofday(&start, NULL);
-    double elapsed = 0.0;
-    while (elapsed < T) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        int maxfd = -1;
+//     gettimeofday(&start, NULL);
+//     double elapsed = 0.0;
+//     while (elapsed < T) {
+//         fd_set readfds;
+//         FD_ZERO(&readfds);
+//         int maxfd = -1;
 
-        // Agregar solo sockets abiertos
-        for (int i = 0; i < NUM_CONN; i++) {
-            if (socks[i] != -1) {
-                FD_SET(socks[i], &readfds);
-                if (socks[i] > maxfd) maxfd = socks[i];
-            }
-        }
+//         // Agregar solo sockets abiertos
+//         for (int i = 0; i < NUM_CONN; i++) {
+//             if (socks[i] != -1) {
+//                 FD_SET(socks[i], &readfds);
+//                 if (socks[i] > maxfd) maxfd = socks[i];
+//             }
+//         }
 
        
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        elapsed = (now.tv_sec - start.tv_sec)
-                + (now.tv_usec - start.tv_usec) / 1e6;
-        double remaining = T - elapsed;
-        if (remaining <= 0.0) break;
+//         struct timeval now;
+//         gettimeofday(&now, NULL);
+//         elapsed = (now.tv_sec - start.tv_sec)
+//                 + (now.tv_usec - start.tv_usec) / 1e6;
+//         double remaining = T - elapsed;
+//         if (remaining <= 0.0) break;
 
-        struct timeval timeout;
-        timeout.tv_sec = (int)remaining;
-        timeout.tv_usec = (int)((remaining - timeout.tv_sec) * 1e6);
+//         struct timeval timeout;
+//         timeout.tv_sec = (int)remaining;
+//         timeout.tv_usec = (int)((remaining - timeout.tv_sec) * 1e6);
 
-        int activity = select(maxfd + 1, &readfds, NULL, NULL, &timeout);
+//         int activity = select(maxfd + 1, &readfds, NULL, NULL, &timeout);
 
-        if (activity < 0) {
-            if (errno == EINTR) continue; // Interrumpido por una señal, reintentar
-            perror("[X] select");
-            break;
-        }
-        if (activity == 0) {
-            // Timeout alcanzado, salir del bucle
-            break;
-        }
+//         if (activity < 0) {
+//             if (errno == EINTR) continue; // Interrumpido por una señal, reintentar
+//             perror("[X] select");
+//             break;
+//         }
+//         if (activity == 0) {
+//             // Timeout alcanzado, salir del bucle
+//             break;
+//         }
 
-        for (int i = 0; i < NUM_CONN; i++) {
-            if (socks[i] != -1 && FD_ISSET(socks[i], &readfds)) {
-                ssize_t n = recv(socks[i], buffer, DATA_BUFFER_SIZE, 0);
-                if (n <= 0) {
-                    perror("[X] recv");
-                    close(socks[i]);
-                    socks[i] = -1;
-                } else {
-                    total += n;
-                }
-            }
-        }
+//         for (int i = 0; i < NUM_CONN; i++) {
+//             if (socks[i] != -1 && FD_ISSET(socks[i], &readfds)) {
+//                 ssize_t n = recv(socks[i], buffer, DATA_BUFFER_SIZE, 0);
+//                 if (n <= 0) {
+//                     perror("[X] recv\n");
+//                     close(socks[i]);
+//                     socks[i] = -1;
+//                 } else {
+//                     total += n;
+//                 }
+//             }
+//         }
 
         
-    }
+//     }
 
-    gettimeofday(&end, NULL);
-    elapsed = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
+//     gettimeofday(&end, NULL);
+//     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
     
-    for (int i = 0; i < NUM_CONN; i++){
-        if (socks[i] != -1) {
-            close(socks[i]);
-            socks[i] = -1; // Marcar como cerrado
+//     for (int i = 0; i < NUM_CONN; i++){
+//         if (socks[i] != -1) {
+//             close(socks[i]);
+//             socks[i] = -1; // Marcar como cerrado
+//         }
+//     }
+//     printf("[✓] Descarga total: %lu bytes\n", total);
+//     double bw_bps = (double)total * 8.0 / elapsed; // Convertir a bits por segundo
+//     return bw_bps;
+// }
+
+double download_test(const char *server_ip, char *src_ip) {
+    int pipes[NUM_CONN][2];
+    pid_t pids[NUM_CONN];
+    struct sockaddr_in server;
+    socklen_t addr_len = sizeof(server);
+
+    // 1) Prepara la dirección del servidor
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port   = htons(PORT_DOWNLOAD);
+    inet_pton(AF_INET, server_ip, &server.sin_addr);
+
+    // 2) Para cada conexión: crea pipe, socket + fork
+    for (int i = 0; i < NUM_CONN; i++) {
+        if (pipe(pipes[i]) < 0) {
+            perror("pipe");
+            exit(1);
+        }
+
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            perror("socket");
+            exit(1);
+        }
+        if (connect(sock, (struct sockaddr*)&server, addr_len) < 0) {
+            perror("connect");
+            exit(1);
+        }
+
+        if ((pids[i] = fork()) == 0) {
+            // --- HIJO i ---
+            close(pipes[i][0]);    // cierra lectura
+            uint64_t total_i = 0;
+            char buf[DATA_BUFFER_SIZE];
+            struct timeval start, now;
+            gettimeofday(&start, NULL);
+
+            while (1) {
+                gettimeofday(&now, NULL);
+                double elapsed = (now.tv_sec  - start.tv_sec)
+                               + (now.tv_usec - start.tv_usec) / 1e6;
+                if (elapsed >= T) break;
+
+                ssize_t n = recv(sock, buf, sizeof(buf), 0);
+                if (n <= 0) break;
+                total_i += n;
+            }
+
+            // escribe al padre
+            if (write(pipes[i][1], &total_i, sizeof(total_i)) < 0)
+                perror("write pipe");
+            close(pipes[i][1]);
+            close(sock);
+            exit(0);
+        } else {
+            // --- PADRE ---
+            close(pipes[i][1]);   // cierra escritura
+            close(sock);          // padre no usa este socket
         }
     }
-    printf("[✓] Descarga total: %lu bytes\n", total);
-    double bw_bps = (double)total * 8.0 / elapsed; // Convertir a bits por segundo
-    return bw_bps;
+
+    // 3) El padre mide el tiempo total
+    struct timeval start_all, end_all;
+    gettimeofday(&start_all, NULL);
+
+    for (int i = 0; i < NUM_CONN; i++) {
+        waitpid(pids[i], NULL, 0);
+    }
+
+    gettimeofday(&end_all, NULL);
+    double elapsed = (end_all.tv_sec  - start_all.tv_sec)
+                   + (end_all.tv_usec - start_all.tv_usec) / 1e6;
+
+    // 4) Suma los bytes llegados de cada hijo
+    uint64_t total = 0;
+    for (int i = 0; i < NUM_CONN; i++) {
+        uint64_t part = 0;
+        if (read(pipes[i][0], &part, sizeof(part)) < 0)
+            perror("read pipe");
+        close(pipes[i][0]);
+        total += part;
+    }
+
+    // 5) Obtener src_ip como antes del primer socket
+    //    (puedes reutilizar un socket temporal o simplemente usar server_ip)
+    //    Aquí lo dejamos igual que antes:
+    {
+      int tmp = socket(AF_INET, SOCK_STREAM, 0);
+      struct sockaddr_in local;
+      socklen_t len = sizeof(local);
+      connect(tmp, (struct sockaddr*)&server, addr_len);
+      getsockname(tmp, (struct sockaddr*)&local, &len);
+      inet_ntop(AF_INET, &local.sin_addr, src_ip, INET_ADDRSTRLEN);
+      close(tmp);
+    }
+
+    printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed);
+    return (double)total * 8.0 / elapsed;  // bps reales
 }
+
 
 void upload_test(const char *server_ip, uint32_t id) {
     char payload[DATA_BUFFER_SIZE];

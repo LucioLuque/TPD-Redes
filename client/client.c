@@ -19,6 +19,7 @@
 #define SERVER_IP "127.0.0.1"
 #define PORT_DOWNLOAD 20251
 #define PORT_UPLOAD 20252
+#define JSON_PORT 9999
 int NUM_CONN = 10; 
 
 uint32_t generate_id();
@@ -26,7 +27,7 @@ double medir_rtt();
 double download_test(const char *server_ip, char *src_ip);//, char *dst_ip);
 void upload_test(const char *server_ip, uint32_t id);
 void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result);
-void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip, const char *json_ip);
+void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip);
 
 double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *etapa_nombre) {
     double total = 0.0;
@@ -49,7 +50,7 @@ double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *e
     return promedio;
 }
 
-int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *test_download, bool *test_upload, const char **json_ip) {
+int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *test_download, bool *test_upload) {
     // Parseo de argumentos
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-idle") == 0 && i + 1 < argc) {
@@ -74,9 +75,6 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
             }
             i++;
 
-        } else if (strcmp(argv[i], "-json") == 0 && i + 1 < argc) {
-            *json_ip = argv[i + 1];
-            i++;
         } else {
             fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-idle true|false] [-download true|false] [-upload true|false] [-conn <NUM_CONN>]\n", argv[0]);
             return 1;
@@ -85,9 +83,6 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
 
     if (*ip_servidor == NULL || strlen(*ip_servidor) == 0) {
         *ip_servidor = SERVER_IP;
-    }
-    if (*json_ip == NULL || strlen(*json_ip) == 0) {
-        *json_ip = *ip_servidor; // que hacer aca?
     }
 
     return 0;
@@ -100,12 +95,11 @@ int main(int argc, char *argv[]) {
     bool idle = true;
     bool test_download = true;
     bool test_upload = true;
-    const char *json_ip = NULL;
     
     // srandom(time(NULL));
     srandom((unsigned)time(NULL) ^ (unsigned)getpid());
 
-    if (parseo(argc, argv, &ip_servidor, &idle, &test_download, &test_upload, &json_ip) != 0) {    
+    if (parseo(argc, argv, &ip_servidor, &idle, &test_download, &test_upload) != 0) {    
         return 1; // Error en el parseo
     }
     //imprimir todos los campos de parseo
@@ -119,7 +113,6 @@ int main(int argc, char *argv[]) {
     double rtt_idle = 0.0, rtt_down = 0.0, rtt_up = 0.0;
     double bw_download_bps = 0.0, bw_upload_bps = 0.0;
     char src_ip[INET_ADDRSTRLEN] = "0.0.0.0";
-    // char dst_ip[INET_ADDRSTRLEN] = "0.0.0.0";
     uint32_t id = 0;
 
     // Paso 1: medir latencia antes de todo (fase idle)
@@ -168,7 +161,7 @@ int main(int argc, char *argv[]) {
     
 
     // Paso 5: exportar el JSON, por ahora manda por prints
-    exportar_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, ip_servidor, json_ip);
+    exportar_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, ip_servidor);
     return 0;
 }
 
@@ -419,7 +412,7 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
 }
 
 
-void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip, const char *json_ip) {    
+void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip) {    
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     char timestamp[20]; // "YYYY-MM-DD HH:MM:SS" son 19 + '\0'
@@ -464,8 +457,8 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
 
     struct sockaddr_in dest;
     dest.sin_family = AF_INET;
-    dest.sin_port = htons(20253); //osea por ahor apongo esto, pero que puerto ponermos??
-    if (inet_pton(AF_INET, json_ip, &dest.sin_addr) <= 0) {
+    dest.sin_port = htons(JSON_PORT); //longstash port 
+    if (inet_pton(AF_INET, dst_ip, &dest.sin_addr) <= 0) {
         perror("inet_pton JSON");
         close(sock);
         return;
@@ -474,7 +467,7 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
     if (sendto(sock, json_buffer, len, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
         perror("sendto JSON");
     } else {
-        printf("[✓] JSON enviado a %s:%d\n", json_ip, PORT_DOWNLOAD);
+        printf("[✓] JSON enviado a %s:%d\n", dst_ip, PORT_DOWNLOAD);
     }
     close(sock);
 }

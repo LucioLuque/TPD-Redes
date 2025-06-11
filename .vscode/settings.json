@@ -9,6 +9,12 @@
         "stdint.h": "c",
         "wait.h": "c",
         "time.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "stdbool.h": "c",
+        "ctype.h": "c",
+        "server_funcs.h": "c",
+        "client_funcs.h": "c",
+        "stdio.h": "c",
+        "config.h": "c"
     }
 }

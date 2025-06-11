@@ -1,29 +1,4 @@
-#include <endian.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <arpa/inet.h>  /* htonl */
-#include <string.h>     /* memcpy */
-#include <ctype.h>     /* needed for isprint() */
-#include <errno.h>
-
 #include "handle_result.h"
-
-#ifndef HEXDUMP_COLS
-#define HEXDUMP_COLS 16
-#endif 
-
-void hexdump(void *mem, unsigned int len);
-
-// #define NUM_CONN 10
-
-#define E_MINIMUM_DATA    -1
-#define E_NOT_ENOUGH_DATA -2
-#define E_NO_NEW_LINE     -3
-#define E_LINE_TOO_LONG   -4
-#define E_INV_LINE_FORMAT -5
-#define E_NUMBER_PARSE    -6
 
 void printBwResult(struct BW_result bw_result) {
   printf("id 0x%x\n", bw_result.id_measurement);

@@ -1,27 +1,28 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -O2
+# Makefile (to be placed in executables/)
 
-HANDLE_SRC = ../handle_result/handle_result.c
-HANDLE_HDR = ../handle_result/handle_result.h
+CC      := gcc
+CFLAGS  := -Wall -Wextra -I../common
 
-CLIENTE_SRC = ../client/client.c
-CLIENTE_EXE = client
+# Source sets
+SERVER_SRCS := ../common/handle_result.c \
+               ../server/server_funcs.c \
+               ../server/server.c
 
-SERVER_SRC = ../server/server.c
-SERVER_EXE = server
-
-all: $(CLIENTE_EXE) $(SERVER_EXE)
-
-# Cliente
-$(CLIENTE_EXE): $(CLIENTE_SRC) $(HANDLE_SRC) $(HANDLE_HDR)
-	$(CC) $(CFLAGS) -o $@ $(CLIENTE_SRC) $(HANDLE_SRC)
-
-# Servidor
-$(SERVER_EXE): $(SERVER_SRC) $(HANDLE_SRC) $(HANDLE_HDR)
-	$(CC) $(CFLAGS) -o $@ $(SERVER_SRC) $(HANDLE_SRC) -lpthread
-
-#clean
-clean:
-	rm -f $(CLIENTE_EXE) $(SERVER_EXE)
+CLIENT_SRCS := ../common/handle_result.c \
+               ../client/client_funcs.c \
+               ../client/client.c
 
 .PHONY: all clean
+
+all: server client
+
+# Build the server executable (no intermediate .o files left)
+server:
+	$(CC) $(CFLAGS) $(SERVER_SRCS) -o server
+
+# Build the client executable
+client:
+	$(CC) $(CFLAGS) $(CLIENT_SRCS) -o client
+
+clean:
+	rm -f server client

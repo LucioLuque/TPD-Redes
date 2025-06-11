@@ -48,8 +48,6 @@ void *handle_download_conn(void *arg) {
         gettimeofday(&now, NULL);
         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
 
-        // Si pasaron T segundos y no se envio nada, se cierra
-        // if (elapsed >= T) break;
     }
     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
     close(sock);
@@ -98,7 +96,7 @@ void *handle_upload_conn(void *arg) {
 }
 
 void *udp_server_thread(void *arg) {
-    (void)arg; // sacar despues esto
+    (void)arg; // evita warning de variable no usada
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in serv, cli;
     socklen_t len = sizeof(cli);

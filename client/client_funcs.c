@@ -60,9 +60,11 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
 }
 
 
-uint32_t generate_id() { //hacer mejor que si es 0xff vuelva a hacer random eso!
+uint32_t generate_id() { 
     uint32_t id = (uint32_t)random();
-    if ((id >> 24) == 0xff) id &= 0x7fffffff;
+    while (id == 0 || (id >> 24) == 0xff) {
+        id = (uint32_t)random();
+    }
     return id;
 }
 

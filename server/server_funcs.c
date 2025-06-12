@@ -4,27 +4,55 @@ struct ResultEntry *results = NULL;
 
 pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-struct BW_result *get_or_create_result(uint32_t id_measurement) {
-    pthread_mutex_lock(&results_mutex);
-    struct ResultEntry *actual = results;
-    while (actual) {
-        if (actual->result.id_measurement == id_measurement) {
-            pthread_mutex_unlock(&results_mutex);
-            return &actual->result;
+// struct BW_result *get_or_create_result(uint32_t id_measurement, 
+//                                        const char *client_ip) {
+//     pthread_mutex_lock(&results_mutex);
+//     struct ResultEntry *actual = results;
+//     for 
+//     while (actual) {
+//         if (actual->result.id_measurement == id_measurement) {
+//             pthread_mutex_unlock(&results_mutex);
+//             return &actual->result;
+//         }
+//         actual = actual->next;
+//     }
+//     struct ResultEntry *new = malloc(sizeof(struct ResultEntry));
+//     new->result.id_measurement = id_measurement;
+//     memset(new->result.conn_bytes, 0, sizeof(new->result.conn_bytes));
+//     memset(new->result.conn_duration, 0, sizeof(new->result.conn_duration));
+//     new->next = results;
+//     results = new;
+//     pthread_mutex_unlock(&results_mutex);
+//     return &new->result;
+// }
+
+struct BW_result *get_or_create_result(uint32_t id_measurement, 
+                                           const char *client_ip) {
+        pthread_mutex_lock(&results_mutex);
+        // struct ResultEntry *actual = results;
+        // buscar 
+        for (struct ResultEntry *r = results; r; r = r->next) {
+            if (r->result.id_measurement == id_measurement
+             && strcmp(r->client_ip, client_ip) == 0) {
+                pthread_mutex_unlock(&results_mutex);
+                return &r->result;
+            }
         }
-        actual = actual->next;
+        
+        struct ResultEntry *new = malloc(sizeof(*new));
+        if (!new) {
+            perror("malloc ResultEntry");
+            pthread_mutex_unlock(&results_mutex);
+            return NULL; // Error al crear nuevo resultado
+        }
+        strncpy(new->client_ip, client_ip, INET_ADDRSTRLEN - 1);
+        memset(&new->result, 0, sizeof(new->result)); // inicializar a cero
+        new->result.id_measurement = id_measurement; 
+        new->next = results;
+        results = new; 
+        pthread_mutex_unlock(&results_mutex);
+        return &new->result;
     }
-    struct ResultEntry *new = malloc(sizeof(struct ResultEntry));
-    new->result.id_measurement = id_measurement;
-    memset(new->result.conn_bytes, 0, sizeof(new->result.conn_bytes));
-    memset(new->result.conn_duration, 0, sizeof(new->result.conn_duration));
-    new->next = results;
-    results = new;
-    pthread_mutex_unlock(&results_mutex);
-    return &new->result;
-}
-
-
 
 void *handle_download_conn(void *arg) {
     struct thread_arg_t *args = arg;
@@ -43,9 +71,9 @@ void *handle_download_conn(void *arg) {
     gettimeofday(&start, NULL);
 
     bool timed_out = false;
-    bool peer_closed = false;
+    bool client_closed = false;
 
-    // 1) Envío hasta T+3 segundos o hasta que el cliente cierre
+    // Enviar datos hasta T+3 segundos o hasta que el cliente cierre
     while (1) {
         // Chequeo tiempo
         gettimeofday(&now, NULL);
@@ -66,11 +94,11 @@ void *handle_download_conn(void *arg) {
             char tmp;
             ssize_t rc = recv(sock, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
             if (rc == 0) {
-                peer_closed = true;
+                client_closed = true;
                 break;
             } else if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                 perror("recv peek");
-                peer_closed = true;
+                client_closed = true;
                 break;
             }
         }
@@ -78,11 +106,18 @@ void *handle_download_conn(void *arg) {
         // Envío datos
         ssize_t sent = send(sock, buffer, sizeof(buffer), 0);
         if (sent < 0) {
-            fprintf(stderr,
-                    "[!] Error al enviar a %s (sock=%d): %s\n",
-                    client_ip, sock, strerror(errno));
-            peer_closed = true;
-            break;
+            if (errno == EPIPE){
+                // el cliente cerró la conexión
+                client_closed = true;
+                break;
+            } else{
+                fprintf(stderr,
+                "[!] Error al enviar a %s (sock=%d): %s\n",
+                client_ip, sock, strerror(errno));
+                client_closed = true;
+                break;
+            }
+            
         }
     }
 
@@ -93,7 +128,7 @@ void *handle_download_conn(void *arg) {
         } else {
             printf("[✓] FIN forzado por timeout a %s\n", client_ip);
         }
-    } else if (peer_closed) {
+    } else if (client_closed) {
         printf("[✓] Cliente cerró primero, fin de envío a %s\n", client_ip);
     }
 
@@ -172,8 +207,14 @@ void *handle_download_conn(void *arg) {
 // }
 
 void *handle_upload_conn(void *arg) {
-    int sock = *(int*)arg;
+    struct thread_arg_t *args = arg;
+    int sock = args->client_sock;
+
+    char client_ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &args->client_addr.sin_addr,
+              client_ip, sizeof(client_ip));
     free(arg);
+
     uint8_t header[6];
     if (recv(sock, header, 6, MSG_WAITALL) != 6) {
         close(sock);
@@ -184,7 +225,7 @@ void *handle_upload_conn(void *arg) {
     id_measurement = ntohl(id_measurement);
     uint16_t id_conn = (header[4] << 8) | header[5];
 
-    struct BW_result *res = get_or_create_result(id_measurement);
+    struct BW_result *res = get_or_create_result(id_measurement, client_ip);
 
     char buffer[DATA_BUFFER_SIZE];
     struct timeval start, now;
@@ -215,8 +256,8 @@ void *handle_upload_conn(void *arg) {
 void *udp_server_thread(void *arg) {
     (void)arg; // evita warning de variable no usada
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    struct sockaddr_in serv, cli;
-    socklen_t len = sizeof(cli);
+    struct sockaddr_in serv, client;
+    socklen_t len = sizeof(client);
     char buffer[DATA_BUFFER_SIZE];
     bool found;
     struct BW_result tmp_result;
@@ -234,18 +275,22 @@ void *udp_server_thread(void *arg) {
     printf("[+] UDP servidor escuchando en puerto %d\n", PORT_DOWNLOAD);
 
     while (1) {
-        n = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&cli, &len);
+        n = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&client, &len);
         if (n < 0) {
             perror("recvfrom");
             continue;
         }
         // RTT
         if (n == 4 && (unsigned char)buffer[0] == 0xff) {
-            sendto(sock, buffer, 4, 0, (struct sockaddr*)&cli, len);
+            sendto(sock, buffer, 4, 0, (struct sockaddr*)&client, len);
             continue;
         }
         //consultar resultados
         if (n == 4) {
+            //obtener la ip del client
+            char client_ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &client.sin_addr, client_ip, sizeof(client_ip));
+
             uint32_t id;
             memcpy(&id, buffer, 4);
             id = ntohl(id);
@@ -255,7 +300,13 @@ void *udp_server_thread(void *arg) {
 
             pthread_mutex_lock(&results_mutex);
             struct ResultEntry *r = results;
-            while (r && r->result.id_measurement != id) r = r->next;
+            while (r){
+                if (r->result.id_measurement == id
+                    && strcmp(r->client_ip, client_ip) == 0) {
+                    break; // encontrado
+                }
+                r = r->next;
+            }                
             if (r) {
                 tmp_result = r->result;
                 found = true;
@@ -266,7 +317,7 @@ void *udp_server_thread(void *arg) {
                 printf("[✓] ID encontrado. Enviando resultados\n");
                 char response[RESULT_BUFFER_SIZE];
                 int resp_size = packResultPayload(tmp_result, response, sizeof(response));
-                sendto(sock, response, resp_size, 0, (struct sockaddr*)&cli, len);
+                sendto(sock, response, resp_size, 0, (struct sockaddr*)&client, len);
             }
             else {
                 // No se encontro el ID

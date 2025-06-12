@@ -22,6 +22,7 @@
 #define MAX_CLIENTS 100
 
 struct ResultEntry {
+    char client_ip[INET_ADDRSTRLEN];
     struct BW_result result;
     struct ResultEntry *next;
 };
@@ -36,6 +37,7 @@ extern struct ResultEntry *results;
 void *handle_download_conn(void *arg);
 void *handle_upload_conn(void *arg);
 void *udp_server_thread(void *arg);
-struct BW_result *get_or_create_result(uint32_t id_measurement);
+struct BW_result *get_or_create_result(uint32_t id_measurement, 
+                                       const char *client_ip);
 
 #endif // SERVER_FUNCS_H

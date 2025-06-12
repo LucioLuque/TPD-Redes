@@ -2,7 +2,7 @@
 #include "server_funcs.h"
 
 int main() {
-    // signal(SIGPIPE, SIG_IGN); //ver de arreglar si se puede 
+    signal(SIGPIPE, SIG_IGN); //ver de arreglar si se puede 
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 
@@ -78,7 +78,11 @@ int main() {
             socklen_t len = sizeof(client);
             int client_sock = accept(tcp_sock_up, (struct sockaddr*)&client, &len);
             pthread_t tid;
-            int *arg = malloc(sizeof(int)); *arg = client_sock;
+            // int *arg = malloc(sizeof(int)); *arg = client_sock;
+            // pthread_create(&tid, NULL, handle_upload_conn, arg);
+            struct thread_arg_t *arg = malloc(sizeof(*arg));
+            arg->client_sock = client_sock;
+            arg->client_addr = client;
             pthread_create(&tid, NULL, handle_upload_conn, arg);
         }
     }

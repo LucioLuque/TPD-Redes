@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
             return 1; // Error en la medición de RTT
         }
     } 
+
     if (test_download) {
         // Paso 2: download test
         if (rtt_down < 0) {
@@ -73,7 +74,6 @@ int main(int argc, char *argv[]) {
         }
         bw_upload_bps = total / num_conn;
     }
-
     
     if (json){
         // Paso 5: exportar el JSON

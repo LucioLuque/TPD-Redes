@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
   /* set socket option in order to lose the pesky "Address already in use" error message */
   int yes=1;
   //char yes='1'; // Solaris people use this
-  if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,&yes,sizeof yes) == -1) {
+  if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,&yes, sizeof yes) == -1) {
     perror("setsockopt");
     return 1;
   } 

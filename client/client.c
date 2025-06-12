@@ -31,7 +31,6 @@ int main(int argc, char *argv[]) {
     double bw_download_bps = 0.0, bw_upload_bps = 0.0;
     char src_ip[INET_ADDRSTRLEN] = "0.0.0.0";
     uint32_t id = 0;
-
     
     if (idle) {
         // Paso 1: medir latencia antes de todo (fase idle)
@@ -44,19 +43,11 @@ int main(int argc, char *argv[]) {
 
     if (test_download) {
         // Paso 2: download test
-        if (rtt_down < 0) {
-            fprintf(stderr, "[X] Abortando.\n");
-            return 1; // Error en la medición de RTT
-        }
         bw_download_bps = download_test(ip_servidor, src_ip, num_conn, &rtt_down);
     }
     
     if (test_upload) {
         // Paso 3: upload test
-        if (rtt_up < 0) {
-            fprintf(stderr, "[X] Abortando.\n");
-            return 1; // Error en la medición de RTT
-        }
         id = generate_id();
         upload_test(ip_servidor, id, num_conn, &rtt_up);    
 

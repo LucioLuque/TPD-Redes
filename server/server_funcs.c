@@ -4,32 +4,9 @@ struct ResultEntry *results = NULL;
 
 pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// struct BW_result *get_or_create_result(uint32_t id_measurement, 
-//                                        const char *client_ip) {
-//     pthread_mutex_lock(&results_mutex);
-//     struct ResultEntry *actual = results;
-//     for 
-//     while (actual) {
-//         if (actual->result.id_measurement == id_measurement) {
-//             pthread_mutex_unlock(&results_mutex);
-//             return &actual->result;
-//         }
-//         actual = actual->next;
-//     }
-//     struct ResultEntry *new = malloc(sizeof(struct ResultEntry));
-//     new->result.id_measurement = id_measurement;
-//     memset(new->result.conn_bytes, 0, sizeof(new->result.conn_bytes));
-//     memset(new->result.conn_duration, 0, sizeof(new->result.conn_duration));
-//     new->next = results;
-//     results = new;
-//     pthread_mutex_unlock(&results_mutex);
-//     return &new->result;
-// }
-
 struct BW_result *get_or_create_result(uint32_t id_measurement, 
                                            const char *client_ip) {
         pthread_mutex_lock(&results_mutex);
-        // struct ResultEntry *actual = results;
         // buscar 
         for (struct ResultEntry *r = results; r; r = r->next) {
             if (r->result.id_measurement == id_measurement
@@ -75,7 +52,7 @@ void *handle_download_conn(void *arg) {
 
     // Enviar datos hasta T+3 segundos o hasta que el cliente cierre
     while (1) {
-        // Chequeo tiempo
+        // Chequea tiempo
         gettimeofday(&now, NULL);
         double elapsed = (now.tv_sec - start.tv_sec)
                        + (now.tv_usec - start.tv_usec) / 1e6;
@@ -84,7 +61,7 @@ void *handle_download_conn(void *arg) {
             break;
         }
 
-        // Compruebo FIN del cliente con select+peek
+        // Comprobar FIN del cliente con select+peek
         fd_set rfds;
         FD_ZERO(&rfds);
         FD_SET(sock, &rfds);
@@ -112,7 +89,7 @@ void *handle_download_conn(void *arg) {
             }
         }
 
-        // Envío datos
+        // Enviar datos
         ssize_t sent = send(sock, buffer, sizeof(buffer), 0);
         if (sent < 0) {
             if (errno == EPIPE){
@@ -130,7 +107,6 @@ void *handle_download_conn(void *arg) {
         }
     }
 
-    // 2) Decido cómo notificar el cierre
     if (timed_out) {
         if (shutdown(sock, SHUT_WR) < 0) {
             perror("shutdown SHUT_WR");
@@ -141,79 +117,9 @@ void *handle_download_conn(void *arg) {
         printf("[✓] Cliente cerró primero, fin de envío a %s\n", client_ip);
     }
 
-    // 3) Cierro socket y finalizo hilo
     close(sock);
     pthread_exit(NULL);
 }
-
-// void *handle_download_conn(void *arg) {
-//     struct thread_arg_t *args = (struct thread_arg_t *)arg;
-//     int sock = args->client_sock;
-//     struct sockaddr_in client_addr = args->client_addr;
-//     free(arg);
-
-//     char client_ip[INET_ADDRSTRLEN];
-//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-//     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
-
-//     char buffer[DATA_BUFFER_SIZE];
-//     memset(buffer, 'D', DATA_BUFFER_SIZE);
-
-//     struct timeval start, now;
-//     gettimeofday(&start, NULL);
-//     double elapsed = 0.0;
-
-//     while (elapsed < T + 3) {
-//         ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
-//         if (sent <= 0) break;  // error o cliente cerro conexion
-
-//         gettimeofday(&now, NULL);
-//         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
-//     }
-//     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
-//     close(sock);
-//     pthread_exit(NULL);
-// }
-
-
-// void *handle_download_conn(void *arg) {
-//     struct thread_arg_t *args = (struct thread_arg_t *)arg;
-//     int sock = args->client_sock;
-//     struct sockaddr_in client_addr = args->client_addr;
-//     free(arg);
-
-//     char client_ip[INET_ADDRSTRLEN];
-//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-//     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
-
-//     char buffer[DATA_BUFFER_SIZE];
-//     memset(buffer, 'D', DATA_BUFFER_SIZE);
-
-//     struct timeval start, now;
-//     gettimeofday(&start, NULL);
-//     double elapsed = 0.0;
-
-//     while (elapsed < T + 3) {
-//         ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, MSG_NOSIGNAL);
-                            
-//         if (sent < 0) {
-//             if (errno == EPIPE) {
-//                 fprintf(stderr,
-//                     "[!] EPIPE: el cliente cerró la conexión (sock=%d)\n",
-//                     sock);
-//             } else {
-//                 perror("send");
-//             }
-//             break;
-//         }
-    
-//         gettimeofday(&now, NULL);
-//         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
-//     }
-//     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
-//     close(sock);
-//     pthread_exit(NULL);
-// }
 
 void *handle_upload_conn(void *arg) {
     struct thread_arg_t *args = arg;
@@ -249,7 +155,7 @@ void *handle_upload_conn(void *arg) {
         double elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
         if (elapsed >= T) break;  // Si ya pasaron T segundos se cierra
     }
-    if (id_conn > 0 && id_conn <= NUM_CONN_MAX) {
+    if (id_conn > 0 && id_conn <= NUM_CONN_MAX) {  // Guardar resultados
         double duration = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
         res->conn_bytes[id_conn - 1] = total_bytes;
         res->conn_duration[id_conn - 1] = duration;
@@ -322,7 +228,6 @@ void *udp_server_thread(void *arg) {
             }
             pthread_mutex_unlock(&results_mutex);
             if (found) {
-
                 printf("[✓] ID encontrado. Enviando resultados\n");
                 char response[RESULT_BUFFER_SIZE];
                 int resp_size = packResultPayload(tmp_result, response, sizeof(response));

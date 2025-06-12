@@ -6,9 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <arpa/inet.h>  /* htonl */
-#include <string.h>     /* memcpy */
-#include <ctype.h>     /* needed for isprint() */
+#include <arpa/inet.h>  
+#include <string.h>    
+#include <ctype.h> 
 #include <errno.h>
 #include "config.h"
 

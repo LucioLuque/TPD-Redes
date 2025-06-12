@@ -28,9 +28,10 @@ int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_c
 double calculate_rtt();
 double rtt_test(const char *server_ip, 
         const char *etapa_nombre);
-double download_test(const char *server_ip, char *src_ip, int num_conn);
+double download_test(const char *server_ip, char *src_ip, int num_conn, 
+        double *rtt_download);
 uint32_t generate_id();
-void upload_test(const char *server_ip, uint32_t id, int num_conn);
+void upload_test(const char *server_ip, uint32_t id, int num_conn, double *rtt_upload);
 void query_results_from_server(const char *ip, int udp_port, uint32_t id_measurement,
         struct BW_result *out_result, int num_conn);
 void export_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle,

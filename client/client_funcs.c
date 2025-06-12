@@ -61,6 +61,58 @@ int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_c
     return 0;
 }
 
+
+// double calculate_paralel_rtt(const char* server_ip, int write_fd) {
+//     struct addrinfo hints = {0}, *res;
+//     hints.ai_family = AF_UNSPEC;
+//     hints.ai_socktype = SOCK_DGRAM;
+
+//     if (getaddrinfo(server_ip, DOWNLOAD_PORT, &hints, &res) != 0) exit(1);
+
+//     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+//     if (sock < 0) exit(1);
+
+//     float total = 0;
+
+//     for (int i = 0; i < 3; ++i) {
+//         uint8_t msg[4] = {0xFF, rand() % 256, rand() % 256, rand() % 256};
+
+//         double t0 = now();
+//         if (sendto(sock, msg, 4, 0, res->ai_addr, res->ai_addrlen) != 4) exit(1);
+
+//         fd_set rfds;
+//         FD_ZERO(&rfds);
+//         FD_SET(sock, &rfds);
+//         struct timeval timeout = {10, 0};
+
+//         int ready = select(sock + 1, &rfds, NULL, NULL, &timeout);
+//         if (ready <= 0) exit(1);
+
+//         uint8_t buf[4];
+//         struct sockaddr_storage from;
+//         socklen_t flen = sizeof(from);
+//         ssize_t n = recvfrom(sock, buf, 4, 0, (struct sockaddr*)&from, &flen);
+//         double t1 = now();
+
+//         if (n != 4 || memcmp(buf, msg, 4) != 0) exit(1);
+
+//         float rtt = (float)(t1 - t0);
+
+//         total += rtt;
+//         sleep(1);
+//     }
+
+//     close(sock);
+//     freeaddrinfo(res);
+
+//     float promedio = total / 3.0;
+//     write(write_fd, &promedio, sizeof(promedio));
+//     close(write_fd);
+//     exit(0);
+// }
+
+
+
 double calculate_rtt(const char *server_ip) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -145,11 +197,23 @@ uint32_t generate_id() {
     return id;
 }
 
-double download_test(const char *server_ip, char *src_ip, int num_conn) {
+double download_test(const char *server_ip, char *src_ip, int num_conn, double *rtt_download) {
     int pipes[num_conn][2];
     pid_t pids[num_conn];
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(server);
+
+    int pipe_rtt[2];
+    if (pipe(pipe_rtt)<0) { perror("pipe RTT"); exit(1); }
+    pid_t pid_rtt = fork();
+    if (pid_rtt == 0) {
+        close(pipe_rtt[0]);
+        double rtt_avg = rtt_test(server_ip, "download");
+        write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
+        close(pipe_rtt[1]);
+        exit(0);
+    }
+    close(pipe_rtt[1]);
 
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
@@ -212,6 +276,8 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
     for (int i = 0; i < num_conn; i++) {
         waitpid(pids[i], NULL, 0);
     }
+    // Espera a que el hijo de RTT termine
+    waitpid(pid_rtt, NULL, 0);
 
     gettimeofday(&end_all, NULL);
     double elapsed = (end_all.tv_sec  - start_all.tv_sec)
@@ -239,8 +305,169 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
     }
 
     printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed);
+    double rtt_avg = 0.0;
+    read(pipe_rtt[0], &rtt_avg, sizeof(rtt_avg));
+    close(pipe_rtt[0]);
+    *rtt_download = rtt_avg;
+
     return (double)total * 8.0 / elapsed;  // bps reales
 }
+
+void upload_test(const char *server_ip, uint32_t id, int num_conn, double *rtt_upload) {
+    int pipe_rtt[2];
+    if (pipe(pipe_rtt) < 0) {
+        perror("pipe RTT");
+        exit(1);
+    }
+    pid_t pid_rtt = fork();
+    if (pid_rtt == 0) {
+        close(pipe_rtt[0]);
+        double rtt_avg = rtt_test(server_ip, "upload");
+        write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
+        close(pipe_rtt[1]);
+        exit(0);
+    }
+    close(pipe_rtt[1]);
+    
+    
+    char payload[DATA_BUFFER_SIZE];
+    memset(payload, 'U', DATA_BUFFER_SIZE);
+
+    for (int i = 0; i < num_conn; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            int sock = socket(AF_INET, SOCK_STREAM, 0);
+            struct sockaddr_in server;
+            server.sin_family = AF_INET;
+            server.sin_port = htons(PORT_UPLOAD);
+            inet_pton(AF_INET, server_ip, &server.sin_addr);
+            connect(sock, (struct sockaddr*)&server, sizeof(server));
+
+            uint8_t header[6];
+            uint32_t netid = htonl(id);
+            memcpy(header, &netid, 4);
+            header[4] = (i+1) >> 8;
+            header[5] = (i+1) & 0xff;
+            send(sock, header, 6, 0);
+
+            struct timeval start, now;
+            gettimeofday(&start, NULL);
+            double elapsed = 0.0;
+            while (elapsed < T) {
+                send(sock, payload, DATA_BUFFER_SIZE, 0);
+                gettimeofday(&now, NULL);
+                elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+            }
+            
+            close(sock);
+            exit(0);
+        }
+    }
+    for (int i = 0; i < num_conn; i++) wait(NULL);
+    waitpid(pid_rtt, NULL, 0);
+    double rtt_avg = 0.0;
+    read(pipe_rtt[0], &rtt_avg, sizeof(rtt_avg));
+    close(pipe_rtt[0]);
+    *rtt_upload = rtt_avg;
+    printf("[✓] Upload terminado\n");
+}
+
+// double download_test(const char *server_ip, char *src_ip, int num_conn) {
+//     int pipes[num_conn][2];
+//     pid_t pids[num_conn];
+//     struct sockaddr_in server;
+//     socklen_t addr_len = sizeof(server);
+
+//     memset(&server, 0, sizeof(server));
+//     server.sin_family = AF_INET;
+//     server.sin_port   = htons(PORT_DOWNLOAD);
+//     inet_pton(AF_INET, server_ip, &server.sin_addr);
+
+//     // Para cada conexión: crea pipe, socket + fork
+//     for (int i = 0; i < num_conn; i++) {
+//         if (pipe(pipes[i]) < 0) {
+//             perror("pipe");
+//             exit(1);
+//         }
+
+//         int sock = socket(AF_INET, SOCK_STREAM, 0);
+//         if (sock < 0) {
+//             perror("socket");
+//             exit(1);
+//         }
+//         if (connect(sock, (struct sockaddr*)&server, addr_len) < 0) {
+//             perror("connect");
+//             exit(1);
+//         }
+
+//         if ((pids[i] = fork()) == 0) {
+//             // hijo i
+//             close(pipes[i][0]);    // cierra lectura
+//             uint64_t total_i = 0;
+//             char buf[DATA_BUFFER_SIZE];
+//             struct timeval start, now;
+//             gettimeofday(&start, NULL);
+
+//             while (1) {
+//                 gettimeofday(&now, NULL);
+//                 double elapsed = (now.tv_sec  - start.tv_sec)
+//                                + (now.tv_usec - start.tv_usec) / 1e6;
+//                 if (elapsed >= T) break;
+
+//                 ssize_t n = recv(sock, buf, sizeof(buf), 0);
+//                 if (n <= 0) break;
+//                 total_i += n;
+//             }
+
+//             // escribe al padre
+//             if (write(pipes[i][1], &total_i, sizeof(total_i)) < 0)
+//                 perror("write pipe");
+//             close(pipes[i][1]);
+//             close(sock);
+//             exit(0);
+//         } else {
+//             // padre
+//             close(pipes[i][1]);   // cierra escritura
+//             close(sock);          // padre no usa este socket
+//         }
+//     }
+
+//     // El padre mide el tiempo total
+//     struct timeval start_all, end_all;
+//     gettimeofday(&start_all, NULL);
+
+//     for (int i = 0; i < num_conn; i++) {
+//         waitpid(pids[i], NULL, 0);
+//     }
+
+//     gettimeofday(&end_all, NULL);
+//     double elapsed = (end_all.tv_sec  - start_all.tv_sec)
+//                    + (end_all.tv_usec - start_all.tv_usec) / 1e6;
+
+//     // Suma los bytes llegados de cada hijo
+//     uint64_t total = 0;
+//     for (int i = 0; i < num_conn; i++) {
+//         uint64_t part = 0;
+//         if (read(pipes[i][0], &part, sizeof(part)) < 0)
+//             perror("read pipe");
+//         close(pipes[i][0]);
+//         total += part;
+//     }
+
+//     //obtener src_ip de la conexión
+//     {
+//       int tmp = socket(AF_INET, SOCK_STREAM, 0);
+//       struct sockaddr_in local;
+//       socklen_t len = sizeof(local);
+//       connect(tmp, (struct sockaddr*)&server, addr_len);
+//       getsockname(tmp, (struct sockaddr*)&local, &len);
+//       inet_ntop(AF_INET, &local.sin_addr, src_ip, INET_ADDRSTRLEN);
+//       close(tmp);
+//     }
+
+//     printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed);
+//     return (double)total * 8.0 / elapsed;  // bps reales
+// }
 
 // double download_test(const char *server_ip, char *src_ip, int num_conn) {
 //     int pipes[num_conn][2];
@@ -349,43 +576,7 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
 //     return (double)total * 8.0 / elapsed_all;  // bps reales
 // }
 
-void upload_test(const char *server_ip, uint32_t id, int num_conn) {
-    char payload[DATA_BUFFER_SIZE];
-    memset(payload, 'U', DATA_BUFFER_SIZE);
 
-    for (int i = 0; i < num_conn; i++) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            int sock = socket(AF_INET, SOCK_STREAM, 0);
-            struct sockaddr_in server;
-            server.sin_family = AF_INET;
-            server.sin_port = htons(PORT_UPLOAD);
-            inet_pton(AF_INET, server_ip, &server.sin_addr);
-            connect(sock, (struct sockaddr*)&server, sizeof(server));
-
-            uint8_t header[6];
-            uint32_t netid = htonl(id);
-            memcpy(header, &netid, 4);
-            header[4] = (i+1) >> 8;
-            header[5] = (i+1) & 0xff;
-            send(sock, header, 6, 0);
-
-            struct timeval start, now;
-            gettimeofday(&start, NULL);
-            double elapsed = 0.0;
-            while (elapsed < T) {
-                send(sock, payload, DATA_BUFFER_SIZE, 0);
-                gettimeofday(&now, NULL);
-                elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
-            }
-            
-            close(sock);
-            exit(0);
-        }
-    }
-    for (int i = 0; i < num_conn; i++) wait(NULL);
-    printf("[✓] Upload terminado\n");
-}
 
 void query_results_from_server(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result, int num_conn) {
     struct sockaddr_in servaddr;
@@ -496,7 +687,7 @@ void export_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_d
     if (sendto(sock, json_buffer, len, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
         perror("sendto JSON");
     } else {
-        printf("[✓] JSON enviado a %s:%d\n", ip_hostremoto, PORT_DOWNLOAD);
+        printf("[✓] JSON enviado a %s:%d\n", ip_hostremoto, json_port);
     }
     close(sock);
 }

@@ -43,23 +43,23 @@ int main(int argc, char *argv[]) {
     } 
     if (test_download) {
         // Paso 2: download test
-        rtt_down = rtt_test(ip_servidor, "download");
+        // rtt_down = rtt_test(ip_servidor, "download");
         if (rtt_down < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
         }
-        bw_download_bps = download_test(ip_servidor, src_ip, num_conn);
+        bw_download_bps = download_test(ip_servidor, src_ip, num_conn, &rtt_down);
     }
     
     if (test_upload) {
         // Paso 3: upload test
-        rtt_up = rtt_test(ip_servidor, "upload");
+        // rtt_up = rtt_test(ip_servidor, "upload");
         if (rtt_up < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
         }
         id = generate_id();
-        upload_test(ip_servidor, id, num_conn);
+        upload_test(ip_servidor, id, num_conn, &rtt_up);    
 
         // Paso 4: consultar resultados
         struct BW_result resultado;

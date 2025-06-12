@@ -1,13 +1,12 @@
 #include "client_funcs.h"
 
-
 int main(int argc, char *argv[]) {
     const char *ip_servidor = NULL;
     bool idle = true;
     bool test_download = true;
     bool test_upload = true;
     bool json = true;
-    int num_conn = NUM_CONN_MAX; // Número de conexiones por defecto
+    int num_conn = NUM_CONN_MAX; // Número de conexiones maximas por defecto
     const char *ip_hostremoto = NULL;
     int json_port = 9999; // por defecto usa el 9999, sino se asigna el valor del argumento
     
@@ -33,8 +32,9 @@ int main(int argc, char *argv[]) {
     char src_ip[INET_ADDRSTRLEN] = "0.0.0.0";
     uint32_t id = 0;
 
-    // Paso 1: medir latencia antes de todo (fase idle)
+    
     if (idle) {
+        // Paso 1: medir latencia antes de todo (fase idle)
         rtt_idle = rtt_test(ip_servidor, "idle");
         if (rtt_idle < 0) {
             fprintf(stderr, "[X] Abortando.\n");
@@ -43,7 +43,6 @@ int main(int argc, char *argv[]) {
     } 
     if (test_download) {
         // Paso 2: download test
-        // rtt_down = rtt_test(ip_servidor, "download");
         if (rtt_down < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
@@ -53,7 +52,6 @@ int main(int argc, char *argv[]) {
     
     if (test_upload) {
         // Paso 3: upload test
-        // rtt_up = rtt_test(ip_servidor, "upload");
         if (rtt_up < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
@@ -76,8 +74,9 @@ int main(int argc, char *argv[]) {
         bw_upload_bps = total / num_conn;
     }
 
-    // Paso 5: exportar el JSON
+    
     if (json){
+        // Paso 5: exportar el JSON
         export_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, ip_servidor, num_conn, ip_hostremoto, json_port);
     }
     

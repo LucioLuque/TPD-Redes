@@ -29,10 +29,10 @@ int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_c
         } else if (strcmp(argv[i], "-json") == 0 && i + 1 < argc) {
             *json = (strcmp(argv[i + 1], "true") == 0);
             i++;
-        } else if (strcmp(argv[i], "-hostremoto") == 0 && i + 1 < argc) {
+        } else if (strcmp(argv[i], "-ip_hostremoto") == 0 && i + 1 < argc) {
             *ip_hostremoto = argv[i + 1];
             i++;
-        } else if (strcmp(argv[i], "-jsonport") == 0 && i + 1 < argc) {
+        } else if (strcmp(argv[i], "-port_host") == 0 && i + 1 < argc) {
             int port = atoi(argv[i + 1]);
             if (port > 0 && port <= 65535) {
                 *json_port = port;
@@ -60,58 +60,6 @@ int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_c
 
     return 0;
 }
-
-
-// double calculate_paralel_rtt(const char* server_ip, int write_fd) {
-//     struct addrinfo hints = {0}, *res;
-//     hints.ai_family = AF_UNSPEC;
-//     hints.ai_socktype = SOCK_DGRAM;
-
-//     if (getaddrinfo(server_ip, DOWNLOAD_PORT, &hints, &res) != 0) exit(1);
-
-//     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-//     if (sock < 0) exit(1);
-
-//     float total = 0;
-
-//     for (int i = 0; i < 3; ++i) {
-//         uint8_t msg[4] = {0xFF, rand() % 256, rand() % 256, rand() % 256};
-
-//         double t0 = now();
-//         if (sendto(sock, msg, 4, 0, res->ai_addr, res->ai_addrlen) != 4) exit(1);
-
-//         fd_set rfds;
-//         FD_ZERO(&rfds);
-//         FD_SET(sock, &rfds);
-//         struct timeval timeout = {10, 0};
-
-//         int ready = select(sock + 1, &rfds, NULL, NULL, &timeout);
-//         if (ready <= 0) exit(1);
-
-//         uint8_t buf[4];
-//         struct sockaddr_storage from;
-//         socklen_t flen = sizeof(from);
-//         ssize_t n = recvfrom(sock, buf, 4, 0, (struct sockaddr*)&from, &flen);
-//         double t1 = now();
-
-//         if (n != 4 || memcmp(buf, msg, 4) != 0) exit(1);
-
-//         float rtt = (float)(t1 - t0);
-
-//         total += rtt;
-//         sleep(1);
-//     }
-
-//     close(sock);
-//     freeaddrinfo(res);
-
-//     float promedio = total / 3.0;
-//     write(write_fd, &promedio, sizeof(promedio));
-//     close(write_fd);
-//     exit(0);
-// }
-
-
 
 double calculate_rtt(const char *server_ip) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);

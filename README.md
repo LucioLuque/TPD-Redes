@@ -52,8 +52,8 @@ Podés desactivar alguna pasando argumentos específicos al ejecutar el comando.
 | `-download`  | Ejecutar prueba de descarga                           | `true`                 |
 | `-upload`    | Ejecutar prueba de subida                             | `true`                 |
 | `-json`      | Enviar resultados en formato JSON                     | `true`                 |
-| `-hostremoto`| IP de destino para enviar el JSON                     | IP del servidor        |
-| `-jsonport`  | Puerto para el envío del JSON                         | `9999` (puerto Logstash) |
+| `-ip_hostremoto`| IP de destino para enviar el JSON                     | IP del servidor        |
+| `-port_host`  | Puerto para el envío del JSON                         | `9999` (puerto Logstash) |
 
 > ⚠️ Si no se asigna una IP de destino para el envío del JSON, se usará la IP del servidor.  
 > ⚠️ Si no se especifica el puerto para el JSON, se usará el **puerto 9999** por defecto.

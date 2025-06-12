@@ -168,33 +168,43 @@ double calculate_rtt(const char *server_ip) {
     return rtt;
 }
 
-double rtt_test(const char *server_ip, const char *etapa_nombre) {
+double rtt_test(const char *server_ip, const char *phase) {
     double total = 0.0;
 
     for (int i = 1; i <= 3; i++) {
         double rtt = calculate_rtt(server_ip);
         if (rtt < 0) {
-            fprintf(stderr, "[X] Error al medir RTT (sin respuesta en 10 s) en etapa: %s, intento %d\n", etapa_nombre, i);
+            fprintf(stderr, "[X] Error al medir RTT (sin respuesta en 10 s) en etapa: %s, intento %d\n", phase, i);
             return -1;
         }
         
         total += rtt;
            
-        printf("[✓] RTT %s %d: %.4f segundos\n", etapa_nombre, i, rtt);
+        printf("[✓] RTT %s %d: %.4f segundos\n", phase, i, rtt);
         if (i < 3) sleep(1);
     }
 
     double promedio = total / 3.0;
-    printf("[✓] RTT %s promedio: %.4f segundos\n", etapa_nombre, promedio);
+    printf("[✓] RTT %s promedio: %.4f segundos\n", phase, promedio);
     return promedio;
 }
 
-uint32_t generate_id() { 
-    uint32_t id = (uint32_t)random();
-    while (id == 0 || (id >> 24) == 0xff) {
-        id = (uint32_t)random();
+
+
+pid_t paralel_rtt_test(const char *server_ip, const char *phase, int pipe_rtt[2]){
+    int initial_delay = (T - 2) / 2; // para que se centre en la mitad
+    pid_t pid_rtt = fork();
+    if (pid_rtt == 0) {
+        close(pipe_rtt[0]);
+        sleep(initial_delay);
+
+        double rtt_avg = rtt_test(server_ip, phase);
+        write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
+        close(pipe_rtt[1]);
+        exit(0);
     }
-    return id;
+    close(pipe_rtt[1]);
+    return pid_rtt;
 }
 
 double download_test(const char *server_ip, char *src_ip, int num_conn, double *rtt_download) {
@@ -202,20 +212,11 @@ double download_test(const char *server_ip, char *src_ip, int num_conn, double *
     pid_t pids[num_conn];
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(server);
-    int initial_delay = (T - 2) / 2;
+    
     int pipe_rtt[2];
-    if (pipe(pipe_rtt)<0) { perror("pipe RTT"); exit(1); }
-    pid_t pid_rtt = fork();
-    if (pid_rtt == 0) {
-        close(pipe_rtt[0]);
-        sleep(initial_delay);
-
-        double rtt_avg = rtt_test(server_ip, "download");
-        write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
-        close(pipe_rtt[1]);
-        exit(0);
-    }
-    close(pipe_rtt[1]);
+    if (pipe(pipe_rtt)<0) {perror("pipe RTT"); exit(1); }
+    
+    pid_t pid_rtt = paralel_rtt_test(server_ip, "download", pipe_rtt);
 
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
@@ -315,22 +316,22 @@ double download_test(const char *server_ip, char *src_ip, int num_conn, double *
     return (double)total * 8.0 / elapsed;  // bps reales
 }
 
+uint32_t generate_id() { 
+    uint32_t id = (uint32_t)random();
+    while (id == 0 || (id >> 24) == 0xff) {
+        id = (uint32_t)random();
+    }
+    return id;
+}
+
 void upload_test(const char *server_ip, uint32_t id, int num_conn, double *rtt_upload) {
     int pipe_rtt[2];
     if (pipe(pipe_rtt) < 0) {
         perror("pipe RTT");
         exit(1);
     }
-    pid_t pid_rtt = fork();
-    if (pid_rtt == 0) {
-        close(pipe_rtt[0]);
-        double rtt_avg = rtt_test(server_ip, "upload");
-        write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
-        close(pipe_rtt[1]);
-        exit(0);
-    }
-    close(pipe_rtt[1]);
     
+    pid_t pid_rtt = paralel_rtt_test(server_ip, "upload", pipe_rtt);
     
     char payload[DATA_BUFFER_SIZE];
     memset(payload, 'U', DATA_BUFFER_SIZE);

@@ -25,9 +25,9 @@
 int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_conn, 
     bool *idle, bool *test_download, bool *test_upload, bool *json,
     const char **ip_hostremoto, int *json_port);
-double calculate_rtt();
-double rtt_test(const char *server_ip, 
-        const char *etapa_nombre);
+double calculate_rtt(const char *server_ip);
+double rtt_test(const char *server_ip, const char *phase);
+pid_t paralel_rtt_test(const char *server_ip, const char *phase, int pipe_rtt[2]);
 double download_test(const char *server_ip, char *src_ip, int num_conn, 
         double *rtt_download);
 uint32_t generate_id();

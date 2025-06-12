@@ -1,7 +1,8 @@
 
 #include "server_funcs.h"
 
-int main() { 
+int main() {
+    signal(SIGPIPE, SIG_IGN); //ver de arreglar si se puede 
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 

@@ -26,110 +26,110 @@ struct BW_result *get_or_create_result(uint32_t id_measurement) {
 
 
 
-// void *handle_download_conn(void *arg) {
-//     struct thread_arg_t *args = arg;
-//     int sock = args->client_sock;
-//     struct sockaddr_in client_addr = args->client_addr;
-//     free(arg);
-
-//     char client_ip[INET_ADDRSTRLEN];
-//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
-//     printf("[+] Nueva conexión de descarga desde %s\n", client_ip);
-
-//     char buffer[DATA_BUFFER_SIZE];
-//     memset(buffer, 'D', sizeof(buffer));
-
-//     struct timeval start, now;
-//     gettimeofday(&start, NULL);
-
-//     bool timed_out = false;
-//     bool peer_closed = false;
-
-//     // 1) Envío hasta T+3 segundos o hasta que el cliente cierre
-//     while (1) {
-//         // Chequeo tiempo
-//         gettimeofday(&now, NULL);
-//         double elapsed = (now.tv_sec - start.tv_sec)
-//                        + (now.tv_usec - start.tv_usec) / 1e6;
-//         if (elapsed >= T + 3) {
-//             timed_out = true;
-//             break;
-//         }
-
-//         // Compruebo FIN del cliente con select+peek
-//         fd_set rfds;
-//         FD_ZERO(&rfds);
-//         FD_SET(sock, &rfds);
-//         struct timeval tv = { 0, 0 };
-//         int r = select(sock + 1, &rfds, NULL, NULL, &tv);
-//         if (r > 0 && FD_ISSET(sock, &rfds)) {
-//             char tmp;
-//             ssize_t rc = recv(sock, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
-//             if (rc == 0) {
-//                 peer_closed = true;
-//                 break;
-//             } else if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-//                 perror("recv peek");
-//                 peer_closed = true;
-//                 break;
-//             }
-//         }
-
-//         // Envío datos
-//         ssize_t sent = send(sock, buffer, sizeof(buffer), 0);
-//         if (sent < 0) {
-//             fprintf(stderr,
-//                     "[!] Error al enviar a %s (sock=%d): %s\n",
-//                     client_ip, sock, strerror(errno));
-//             peer_closed = true;
-//             break;
-//         }
-//     }
-
-//     // 2) Decido cómo notificar el cierre
-//     if (timed_out) {
-//         if (shutdown(sock, SHUT_WR) < 0) {
-//             perror("shutdown SHUT_WR");
-//         } else {
-//             printf("[✓] FIN forzado por timeout a %s\n", client_ip);
-//         }
-//     } else if (peer_closed) {
-//         printf("[✓] Cliente cerró primero, fin de envío a %s\n", client_ip);
-//     }
-
-//     // 3) Cierro socket y finalizo hilo
-//     close(sock);
-//     pthread_exit(NULL);
-// }
-
 void *handle_download_conn(void *arg) {
-    struct thread_arg_t *args = (struct thread_arg_t *)arg;
+    struct thread_arg_t *args = arg;
     int sock = args->client_sock;
     struct sockaddr_in client_addr = args->client_addr;
     free(arg);
 
     char client_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-    printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+    printf("[+] Nueva conexión de descarga desde %s\n", client_ip);
 
     char buffer[DATA_BUFFER_SIZE];
-    memset(buffer, 'D', DATA_BUFFER_SIZE);
+    memset(buffer, 'D', sizeof(buffer));
 
     struct timeval start, now;
     gettimeofday(&start, NULL);
-    double elapsed = 0.0;
 
-    while (elapsed < T + 3) {
-        ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
-        if (sent <= 0) break;  // error o cliente cerro conexion
+    bool timed_out = false;
+    bool peer_closed = false;
 
+    // 1) Envío hasta T+3 segundos o hasta que el cliente cierre
+    while (1) {
+        // Chequeo tiempo
         gettimeofday(&now, NULL);
-        elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+        double elapsed = (now.tv_sec - start.tv_sec)
+                       + (now.tv_usec - start.tv_usec) / 1e6;
+        if (elapsed >= T + 3) {
+            timed_out = true;
+            break;
+        }
+
+        // Compruebo FIN del cliente con select+peek
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(sock, &rfds);
+        struct timeval tv = { 0, 0 };
+        int r = select(sock + 1, &rfds, NULL, NULL, &tv);
+        if (r > 0 && FD_ISSET(sock, &rfds)) {
+            char tmp;
+            ssize_t rc = recv(sock, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (rc == 0) {
+                peer_closed = true;
+                break;
+            } else if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                perror("recv peek");
+                peer_closed = true;
+                break;
+            }
+        }
+
+        // Envío datos
+        ssize_t sent = send(sock, buffer, sizeof(buffer), 0);
+        if (sent < 0) {
+            fprintf(stderr,
+                    "[!] Error al enviar a %s (sock=%d): %s\n",
+                    client_ip, sock, strerror(errno));
+            peer_closed = true;
+            break;
+        }
     }
-    printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
+
+    // 2) Decido cómo notificar el cierre
+    if (timed_out) {
+        if (shutdown(sock, SHUT_WR) < 0) {
+            perror("shutdown SHUT_WR");
+        } else {
+            printf("[✓] FIN forzado por timeout a %s\n", client_ip);
+        }
+    } else if (peer_closed) {
+        printf("[✓] Cliente cerró primero, fin de envío a %s\n", client_ip);
+    }
+
+    // 3) Cierro socket y finalizo hilo
     close(sock);
     pthread_exit(NULL);
 }
+
+// void *handle_download_conn(void *arg) {
+//     struct thread_arg_t *args = (struct thread_arg_t *)arg;
+//     int sock = args->client_sock;
+//     struct sockaddr_in client_addr = args->client_addr;
+//     free(arg);
+
+//     char client_ip[INET_ADDRSTRLEN];
+//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+//     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
+
+//     char buffer[DATA_BUFFER_SIZE];
+//     memset(buffer, 'D', DATA_BUFFER_SIZE);
+
+//     struct timeval start, now;
+//     gettimeofday(&start, NULL);
+//     double elapsed = 0.0;
+
+//     while (elapsed < T + 3) {
+//         ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
+//         if (sent <= 0) break;  // error o cliente cerro conexion
+
+//         gettimeofday(&now, NULL);
+//         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+//     }
+//     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
+//     close(sock);
+//     pthread_exit(NULL);
+// }
 
 
 // void *handle_download_conn(void *arg) {

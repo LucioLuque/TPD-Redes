@@ -253,6 +253,8 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
     server.sin_port   = htons(PORT_DOWNLOAD);
     inet_pton(AF_INET, server_ip, &server.sin_addr);
 
+    struct timeval start_all, end_all;
+    gettimeofday(&start_all, NULL);
     // Para cada conexión: crea pipe, socket + fork
     for (int i = 0; i < num_conn; i++) {
         if (pipe(pipes[i]) < 0) {
@@ -275,13 +277,28 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
             close(pipes[i][0]);    // cierra lectura
             uint64_t total_i = 0;
             char buf[DATA_BUFFER_SIZE];
-            struct timeval start;
+            struct timeval start, now;
             gettimeofday(&start, NULL);
             
             ssize_t n;
-            while ((n = recv(sock, buf, sizeof(buf), 0)) > 0) {
+            while (1){
+                gettimeofday(&now, NULL);
+                double elapsed = (now.tv_sec  - start.tv_sec)
+                               + (now.tv_usec - start.tv_usec) / 1e6;
+                if (elapsed >= T){
+                    shutdown(sock, SHUT_WR); // notifica fin de envío
+
+                    break;
+                }
+                n = recv(sock, buf, sizeof(buf), 0);
+                if (n <= 0) {
+                    if (n < 0) perror("recv");
+                    break; // error o conexión cerrada
+                }
                 total_i += n;
+
             }
+            
             // escribe al padre
             if (write(pipes[i][1], &total_i, sizeof(total_i)) < 0)
                 perror("write pipe");
@@ -296,15 +313,15 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
     }
 
     // El padre mide el tiempo total
-    struct timeval start_all, end_all;
-    gettimeofday(&start_all, NULL);
+    // struct timeval start_all, end_all;
+    // gettimeofday(&start_all, NULL);
 
     for (int i = 0; i < num_conn; i++) {
         waitpid(pids[i], NULL, 0);
     }
-
+    
     gettimeofday(&end_all, NULL);
-    double elapsed = (end_all.tv_sec  - start_all.tv_sec)
+    double elapsed_all = (end_all.tv_sec  - start_all.tv_sec)
                    + (end_all.tv_usec - start_all.tv_usec) / 1e6;
 
     // Suma los bytes llegados de cada hijo
@@ -328,8 +345,8 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
       close(tmp);
     }
 
-    printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed);
-    return (double)total * 8.0 / elapsed;  // bps reales
+    printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed_all);
+    return (double)total * 8.0 / elapsed_all;  // bps reales
 }
 
 void upload_test(const char *server_ip, uint32_t id, int num_conn) {

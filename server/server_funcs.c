@@ -25,6 +25,7 @@ struct BW_result *get_or_create_result(uint32_t id_measurement) {
 }
 
 
+
 void *handle_download_conn(void *arg) {
     struct thread_arg_t *args = (struct thread_arg_t *)arg;
     int sock = args->client_sock;
@@ -32,7 +33,7 @@ void *handle_download_conn(void *arg) {
     free(arg);
 
     char client_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
     printf("[+] Nueva conexión de descarga desde %s\n", client_ip);
 
     // Buffer que llenamos de 'D'
@@ -43,6 +44,7 @@ void *handle_download_conn(void *arg) {
     struct timeval start, now;
     gettimeofday(&start, NULL);
     double elapsed = 0.0;
+    bool timed_out = false;
 
     // Bucle de envío durante T+3 segundos o hasta FIN del peer
     while (elapsed < T + 3) {
@@ -80,11 +82,17 @@ void *handle_download_conn(void *arg) {
                   + (now.tv_usec - start.tv_usec) / 1e6;
     }
 
-    // 4) Half-close: aviso al cliente que ya no envío más datos
-    if (shutdown(sock, SHUT_WR) < 0) {
-        perror("shutdown SHUT_WR");
+    // 4) Decido si forzar FIN tras timeout o reconocer FIN del cliente
+    timed_out = (elapsed >= T + 3);
+    if (timed_out) {
+        if (shutdown(sock, SHUT_WR) < 0) {
+            perror("shutdown SHUT_WR");
+        } else {
+            printf("[✓] FIN forzado por timeout a %s\n", client_ip);
+        }
+    } else {
+        printf("[✓] Cliente cerró primero, fin de envío a %s\n", client_ip);
     }
-    printf("[✓] FIN de envío notificado a %s\n", client_ip);
 
     // 5) Cierro el socket y termino el hilo
     close(sock);

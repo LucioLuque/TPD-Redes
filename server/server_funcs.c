@@ -96,10 +96,19 @@ void *handle_download_conn(void *arg) {
             if (rc == 0) {
                 client_closed = true;
                 break;
-            } else if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                perror("recv peek");
-                client_closed = true;
-                break;
+            } else if (rc < 0){
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    //nada esperamos al sent
+                } else if (errno == EPIPE || errno == ECONNRESET){
+                    // el cliente cerro la conexion con un close
+                    client_closed = true;
+                    break;
+                } else {
+                    // algun otro error
+                    perror("recv peek");
+                    client_closed = true;
+                    break;
+                }
             }
         }
 
@@ -320,7 +329,7 @@ void *udp_server_thread(void *arg) {
                 sendto(sock, response, resp_size, 0, (struct sockaddr*)&client, len);
             }
             else {
-                // No se encontro el ID
+                // No se encontro la tupla (ID, IP client)
                 fprintf(stderr,
                     "[!] ID no encontrado: 0x%x (largo=%d, primer_byte=0x%02x)\n",
                     id, n, (unsigned char)buffer[0]);

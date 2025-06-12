@@ -202,12 +202,14 @@ double download_test(const char *server_ip, char *src_ip, int num_conn, double *
     pid_t pids[num_conn];
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(server);
-
+    int initial_delay = (T - 2) / 2;
     int pipe_rtt[2];
     if (pipe(pipe_rtt)<0) { perror("pipe RTT"); exit(1); }
     pid_t pid_rtt = fork();
     if (pid_rtt == 0) {
         close(pipe_rtt[0]);
+        sleep(initial_delay);
+
         double rtt_avg = rtt_test(server_ip, "download");
         write(pipe_rtt[1], &rtt_avg, sizeof(rtt_avg));
         close(pipe_rtt[1]);

@@ -54,6 +54,8 @@ Podés desactivar alguna pasando argumentos específicos al ejecutar el comando.
 | `-json`      | Enviar resultados en formato JSON                     | `true`                 |
 | `-ip_hostremoto`| IP de destino para enviar el JSON                     | IP del servidor        |
 | `-port_host`  | Puerto para el envío del JSON                         | `9999` (puerto Logstash) |
+| `-h`         | Mostrar mensaje de ayuda y salir                     | -                      |
+
 
 > ⚠️ Si no se asigna una IP de destino para el envío del JSON, se usará la IP del servidor.  
 > ⚠️ Si no se especifica el puerto para el JSON, se usará el **puerto 9999** por defecto.

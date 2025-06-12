@@ -1,28 +1,29 @@
 
 #include "server_funcs.h"
-struct ResultadoEntry *resultados = NULL;
+struct ResultEntry *results = NULL;
 
-pthread_mutex_t resultados_mutex = PTHREAD_MUTEX_INITIALIZER;
-// Buscar o crear entrada para ID de medicion
-struct BW_result *obtener_o_crear_resultado(uint32_t id_measurement) {
-    pthread_mutex_lock(&resultados_mutex);
-    struct ResultadoEntry *actual = resultados;
+pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+struct BW_result *get_or_create_result(uint32_t id_measurement) {
+    pthread_mutex_lock(&results_mutex);
+    struct ResultEntry *actual = results;
     while (actual) {
         if (actual->result.id_measurement == id_measurement) {
-            pthread_mutex_unlock(&resultados_mutex);
+            pthread_mutex_unlock(&results_mutex);
             return &actual->result;
         }
         actual = actual->next;
     }
-    struct ResultadoEntry *nuevo = malloc(sizeof(struct ResultadoEntry));
-    nuevo->result.id_measurement = id_measurement;
-    memset(nuevo->result.conn_bytes, 0, sizeof(nuevo->result.conn_bytes));
-    memset(nuevo->result.conn_duration, 0, sizeof(nuevo->result.conn_duration));
-    nuevo->next = resultados;
-    resultados = nuevo;
-    pthread_mutex_unlock(&resultados_mutex);
-    return &nuevo->result;
+    struct ResultEntry *new = malloc(sizeof(struct ResultEntry));
+    new->result.id_measurement = id_measurement;
+    memset(new->result.conn_bytes, 0, sizeof(new->result.conn_bytes));
+    memset(new->result.conn_duration, 0, sizeof(new->result.conn_duration));
+    new->next = results;
+    results = new;
+    pthread_mutex_unlock(&results_mutex);
+    return &new->result;
 }
+
 
 void *handle_download_conn(void *arg) {
     struct thread_arg_t *args = (struct thread_arg_t *)arg;
@@ -32,27 +33,137 @@ void *handle_download_conn(void *arg) {
 
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-    printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
+    printf("[+] Nueva conexión de descarga desde %s\n", client_ip);
 
+    // Buffer que llenamos de 'D'
     char buffer[DATA_BUFFER_SIZE];
     memset(buffer, 'D', DATA_BUFFER_SIZE);
 
+    // Control de tiempo
     struct timeval start, now;
     gettimeofday(&start, NULL);
     double elapsed = 0.0;
 
+    // Bucle de envío durante T+3 segundos o hasta FIN del peer
     while (elapsed < T + 3) {
+        // 1) Compruebo si hay FIN del cliente
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(sock, &rfds);
+        struct timeval tv = { 0, 0 };  // no bloqueante
+        int r = select(sock + 1, &rfds, NULL, NULL, &tv);
+        if (r > 0 && FD_ISSET(sock, &rfds)) {
+            char tmp;
+            ssize_t rc = recv(sock, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (rc == 0) {
+                // El cliente envió FIN: salgo sin más sends
+                break;
+            } else if (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                perror("recv peek");
+                break;
+            }
+            // rc>0 o EAGAIN/EWOULDBLOCK → conexión sigue viva
+        }
+
+        // 2) Envío datos
         ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
-        if (sent <= 0) break;  // error o cliente cerro conexion
+        if (sent < 0) {
+            fprintf(stderr,
+                    "[!] Error al enviar datos a %s (sock=%d): %s\n",
+                    client_ip, sock, strerror(errno));
+            break;
+        }
 
+        // 3) Actualizo tiempo transcurrido
         gettimeofday(&now, NULL);
-        elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
-
+        elapsed = (now.tv_sec - start.tv_sec)
+                  + (now.tv_usec - start.tv_usec) / 1e6;
     }
-    printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
+
+    // 4) Half-close: aviso al cliente que ya no envío más datos
+    if (shutdown(sock, SHUT_WR) < 0) {
+        perror("shutdown SHUT_WR");
+    }
+    printf("[✓] FIN de envío notificado a %s\n", client_ip);
+
+    // 5) Cierro el socket y termino el hilo
     close(sock);
     pthread_exit(NULL);
 }
+
+// void *handle_download_conn(void *arg) {
+//     struct thread_arg_t *args = (struct thread_arg_t *)arg;
+//     int sock = args->client_sock;
+//     struct sockaddr_in client_addr = args->client_addr;
+//     free(arg);
+
+//     char client_ip[INET_ADDRSTRLEN];
+//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+//     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
+
+//     char buffer[DATA_BUFFER_SIZE];
+//     memset(buffer, 'D', DATA_BUFFER_SIZE);
+
+//     struct timeval start, now;
+//     gettimeofday(&start, NULL);
+//     double elapsed = 0.0;
+
+//     // while (elapsed < T + 3) {
+//     //     ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, 0);
+//     //     if (sent <= 0) break;  // error o cliente cerro conexion
+
+//     //     gettimeofday(&now, NULL);
+//     //     elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+
+//     // }
+
+//         gettimeofday(&now, NULL);
+//         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+//     }
+//     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
+//     close(sock);
+//     pthread_exit(NULL);
+// }
+
+
+// void *handle_download_conn(void *arg) {
+//     struct thread_arg_t *args = (struct thread_arg_t *)arg;
+//     int sock = args->client_sock;
+//     struct sockaddr_in client_addr = args->client_addr;
+//     free(arg);
+
+//     char client_ip[INET_ADDRSTRLEN];
+//     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+//     printf("[+] Nueva conexion de descarga desde %s\n", client_ip);
+
+//     char buffer[DATA_BUFFER_SIZE];
+//     memset(buffer, 'D', DATA_BUFFER_SIZE);
+
+//     struct timeval start, now;
+//     gettimeofday(&start, NULL);
+//     double elapsed = 0.0;
+
+//     while (elapsed < T + 3) {
+//         ssize_t sent = send(sock, buffer, DATA_BUFFER_SIZE, MSG_NOSIGNAL);
+                            
+//         if (sent < 0) {
+//             if (errno == EPIPE) {
+//                 fprintf(stderr,
+//                     "[!] EPIPE: el cliente cerró la conexión (sock=%d)\n",
+//                     sock);
+//             } else {
+//                 perror("send");
+//             }
+//             break;
+//         }
+    
+//         gettimeofday(&now, NULL);
+//         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+//     }
+//     printf("[✓] Conexion de descarga cerrada desde %s\n", client_ip);
+//     close(sock);
+//     pthread_exit(NULL);
+// }
 
 void *handle_upload_conn(void *arg) {
     int sock = *(int*)arg;
@@ -67,7 +178,7 @@ void *handle_upload_conn(void *arg) {
     id_measurement = ntohl(id_measurement);
     uint16_t id_conn = (header[4] << 8) | header[5];
 
-    struct BW_result *res = obtener_o_crear_resultado(id_measurement);
+    struct BW_result *res = get_or_create_result(id_measurement);
 
     char buffer[DATA_BUFFER_SIZE];
     struct timeval start, now;
@@ -133,19 +244,17 @@ void *udp_server_thread(void *arg) {
             memcpy(&id, buffer, 4);
             id = ntohl(id);
             printf("[?] Consulta recibida para ID 0x%x\n", id);
-            
            
             found = false;
 
-            pthread_mutex_lock(&resultados_mutex);
-            struct ResultadoEntry *r = resultados;
+            pthread_mutex_lock(&results_mutex);
+            struct ResultEntry *r = results;
             while (r && r->result.id_measurement != id) r = r->next;
-            // pthread_mutex_unlock(&resultados_mutex);
             if (r) {
                 tmp_result = r->result;
                 found = true;
             }
-            pthread_mutex_unlock(&resultados_mutex);
+            pthread_mutex_unlock(&results_mutex);
             if (found) {
 
                 printf("[✓] ID encontrado. Enviando resultados\n");

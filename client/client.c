@@ -6,19 +6,26 @@ int main(int argc, char *argv[]) {
     bool idle = true;
     bool test_download = true;
     bool test_upload = true;
+    bool json = true;
     int num_conn = NUM_CONN_MAX; // Número de conexiones por defecto
+    const char *ip_hostremoto = NULL;
+    int json_port = 9999; // por defecto usa el 9999, sino se asigna el valor del argumento
     
     srandom((unsigned)time(NULL) ^ (unsigned)getpid());
 
-    if (parseo(argc, argv, &ip_servidor, &idle, &test_download, &test_upload, &num_conn) != 0) {    
+    if (parse_arguments(argc, argv, &ip_servidor, &num_conn, &idle, &test_download, &test_upload, &json, &ip_hostremoto, &json_port) != 0) {   
         return 1; // Error en el parseo
     }
     //imprimir todos los campos de parseo
     printf("IP del servidor: %s\n", ip_servidor);
+    printf("Número de conexiones: %d\n", num_conn);
     printf("Test de RTT: %s\n", idle ? "Habilitado" : "Deshabilitado");
     printf("Test de descarga: %s\n", test_download ? "Habilitado" : "Deshabilitado");
     printf("Test de subida: %s\n", test_upload ? "Habilitado" : "Deshabilitado");
-    printf("Número de conexiones: %d\n", num_conn);
+    printf("Exportar JSON: %s\n", json ? "Habilitado" : "Deshabilitado");
+    printf("IP del host remoto: %s\n", ip_hostremoto);
+    printf("Puerto JSON: %d\n", json_port);
+
     printf("[+] Conectando al servidor %s\n", ip_servidor);
 
     double rtt_idle = 0.0, rtt_down = 0.0, rtt_up = 0.0;
@@ -28,7 +35,7 @@ int main(int argc, char *argv[]) {
 
     // Paso 1: medir latencia antes de todo (fase idle)
     if (idle) {
-        rtt_idle = medir_rtt_promedio_con_tres_intentos(ip_servidor, "idle");
+        rtt_idle = rtt_test(ip_servidor, "idle");
         if (rtt_idle < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
@@ -36,7 +43,7 @@ int main(int argc, char *argv[]) {
     } 
     if (test_download) {
         // Paso 2: download test
-        rtt_down = medir_rtt_promedio_con_tres_intentos(ip_servidor, "download");
+        rtt_down = rtt_test(ip_servidor, "download");
         if (rtt_down < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
@@ -46,7 +53,7 @@ int main(int argc, char *argv[]) {
     
     if (test_upload) {
         // Paso 3: upload test
-        rtt_up = medir_rtt_promedio_con_tres_intentos(ip_servidor, "upload");
+        rtt_up = rtt_test(ip_servidor, "upload");
         if (rtt_up < 0) {
             fprintf(stderr, "[X] Abortando.\n");
             return 1; // Error en la medición de RTT
@@ -58,7 +65,7 @@ int main(int argc, char *argv[]) {
         struct BW_result resultado;
         sleep(1); // Esperar un segundo antes de consultar resultados xq 
                 // el upload puede tardar un poco en completarse
-        consultar_resultados(ip_servidor, PORT_DOWNLOAD, id, &resultado, num_conn);
+        query_results_from_server(ip_servidor, PORT_DOWNLOAD, id, &resultado, num_conn);
 
         // Calcular avg upload bps
         double total = 0;
@@ -69,9 +76,10 @@ int main(int argc, char *argv[]) {
         bw_upload_bps = total / num_conn;
     }
 
+    // Paso 5: exportar el JSON
+    if (json){
+        export_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, ip_servidor, num_conn, ip_hostremoto, json_port);
+    }
     
-
-    // Paso 5: exportar el JSON, por ahora manda por prints
-    exportar_json(bw_download_bps, bw_upload_bps, rtt_idle, rtt_down, rtt_up, src_ip, ip_servidor, num_conn);
     return 0;
 }

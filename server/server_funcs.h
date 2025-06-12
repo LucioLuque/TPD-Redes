@@ -21,9 +21,9 @@
 
 #define MAX_CLIENTS 100
 
-struct ResultadoEntry {
+struct ResultEntry {
     struct BW_result result;
-    struct ResultadoEntry *next;
+    struct ResultEntry *next;
 };
 
 struct thread_arg_t {
@@ -31,14 +31,11 @@ struct thread_arg_t {
     struct sockaddr_in client_addr;
 };
 
-// struct ResultadoEntry *resultados = NULL;
-extern struct ResultadoEntry *resultados;
-
-
+extern struct ResultEntry *results;
 
 void *handle_download_conn(void *arg);
 void *handle_upload_conn(void *arg);
 void *udp_server_thread(void *arg);
-struct BW_result *obtener_o_crear_resultado(uint32_t id_measurement);
+struct BW_result *get_or_create_result(uint32_t id_measurement);
 
 #endif // SERVER_FUNCS_H

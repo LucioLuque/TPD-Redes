@@ -1,42 +1,13 @@
 #include "client_funcs.h"
 
-double medir_rtt_promedio_con_tres_intentos(const char *server_ip, const char *etapa_nombre) {
-    double total = 0.0;
-
-    for (int i = 1; i <= 3; i++) {
-        double rtt = medir_rtt(server_ip);
-        if (rtt < 0) {
-            fprintf(stderr, "[X] Error al medir RTT (sin respuesta en 10 s) en etapa: %s, intento %d\n", etapa_nombre, i);
-            return -1;
-        }
-        
-        total += rtt;
-           
-        printf("[✓] RTT %s %d: %.4f segundos\n", etapa_nombre, i, rtt);
-        if (i < 3) sleep(1);
-    }
-
-    double promedio = total / 3.0;
-    printf("[✓] RTT %s promedio: %.4f segundos\n", etapa_nombre, promedio);
-    return promedio;
-}
-
-int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *test_download, bool *test_upload, int *num_conn) {
-    // Parseo de argumentos
+int parse_arguments(int argc, char *argv[], const char **ip_servidor, int *num_conn,
+    bool *idle, bool *test_download, bool *test_upload, bool *json, const char **ip_hostremoto, int *json_port) {
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-idle") == 0 && i + 1 < argc) {
-            *idle = (strcmp(argv[i + 1], "true") == 0);
-            i++;
-        } else if (strcmp(argv[i], "-download") == 0 && i + 1 < argc) {
-            *test_download = (strcmp(argv[i + 1], "true") == 0);
-            i++;
-        } else if (strcmp(argv[i], "-upload") == 0 && i + 1 < argc) {
-            *test_upload = (strcmp(argv[i + 1], "true") == 0);
-            i++;
-        } else if (strcmp(argv[i], "-ip") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "-ip") == 0 && i + 1 < argc) {
             *ip_servidor = argv[i + 1];
             i++;
-        } else if (strcmp(argv[i], "-conn") == 0 && i + 1 < argc) {
+        }
+        else if (strcmp(argv[i], "-conn") == 0 && i + 1 < argc) {
             int conn = atoi(argv[i + 1]);
             if (conn > 0 && conn <= NUM_CONN_MAX) {
                 *num_conn = conn;
@@ -46,6 +17,33 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
             }
             i++;
 
+        } else if (strcmp(argv[i], "-idle") == 0 && i + 1 < argc) {
+            *idle = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-download") == 0 && i + 1 < argc) {
+            *test_download = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-upload") == 0 && i + 1 < argc) {
+            *test_upload = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-json") == 0 && i + 1 < argc) {
+            *json = (strcmp(argv[i + 1], "true") == 0);
+            i++;
+        } else if (strcmp(argv[i], "-hostremoto") == 0 && i + 1 < argc) {
+            *ip_hostremoto = argv[i + 1];
+            i++;
+        } else if (strcmp(argv[i], "-jsonport") == 0 && i + 1 < argc) {
+            int port = atoi(argv[i + 1]);
+            if (port > 0 && port <= 65535) {
+                *json_port = port;
+            } else {
+                fprintf(stderr, "[X] Puerto JSON inválido. Debe ser entre 1 y 65535.\n");
+                return 1;
+            }
+            i++;
+        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-idle true|false] [-download true|false] [-upload true|false] [-conn <num_conn>] [-json true|false] [-hostremoto <IP_HOSTREMOTO>] [-jsonport <PUERTO_JSON>]\n", argv[0]);
+            return 1;
         } else {
             fprintf(stderr, "Uso: %s -ip <IP_SERVIDOR> [-idle true|false] [-download true|false] [-upload true|false] [-conn <num_conn>]\n", argv[0]);
             return 1;
@@ -56,19 +54,14 @@ int parseo(int argc, char *argv[], const char **ip_servidor, bool *idle, bool *t
         *ip_servidor = SERVER_IP;
     }
 
+    if (*ip_hostremoto == NULL || strlen(*ip_hostremoto) == 0) {
+        *ip_hostremoto = *ip_servidor; // Si no se especifica, usar el mismo servidor
+    }
+
     return 0;
 }
 
-
-uint32_t generate_id() { 
-    uint32_t id = (uint32_t)random();
-    while (id == 0 || (id >> 24) == 0xff) {
-        id = (uint32_t)random();
-    }
-    return id;
-}
-
-double medir_rtt(const char *server_ip) {
+double calculate_rtt(const char *server_ip) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         perror("socket");
@@ -123,6 +116,132 @@ double medir_rtt(const char *server_ip) {
     return rtt;
 }
 
+double rtt_test(const char *server_ip, const char *etapa_nombre) {
+    double total = 0.0;
+
+    for (int i = 1; i <= 3; i++) {
+        double rtt = calculate_rtt(server_ip);
+        if (rtt < 0) {
+            fprintf(stderr, "[X] Error al medir RTT (sin respuesta en 10 s) en etapa: %s, intento %d\n", etapa_nombre, i);
+            return -1;
+        }
+        
+        total += rtt;
+           
+        printf("[✓] RTT %s %d: %.4f segundos\n", etapa_nombre, i, rtt);
+        if (i < 3) sleep(1);
+    }
+
+    double promedio = total / 3.0;
+    printf("[✓] RTT %s promedio: %.4f segundos\n", etapa_nombre, promedio);
+    return promedio;
+}
+
+uint32_t generate_id() { 
+    uint32_t id = (uint32_t)random();
+    while (id == 0 || (id >> 24) == 0xff) {
+        id = (uint32_t)random();
+    }
+    return id;
+}
+
+// double download_test(const char *server_ip, char *src_ip, int num_conn) {
+//     int pipes[num_conn][2];
+//     pid_t pids[num_conn];
+//     struct sockaddr_in server;
+//     socklen_t addr_len = sizeof(server);
+
+//     memset(&server, 0, sizeof(server));
+//     server.sin_family = AF_INET;
+//     server.sin_port   = htons(PORT_DOWNLOAD);
+//     inet_pton(AF_INET, server_ip, &server.sin_addr);
+
+//     // Para cada conexión: crea pipe, socket + fork
+//     for (int i = 0; i < num_conn; i++) {
+//         if (pipe(pipes[i]) < 0) {
+//             perror("pipe");
+//             exit(1);
+//         }
+
+//         int sock = socket(AF_INET, SOCK_STREAM, 0);
+//         if (sock < 0) {
+//             perror("socket");
+//             exit(1);
+//         }
+//         if (connect(sock, (struct sockaddr*)&server, addr_len) < 0) {
+//             perror("connect");
+//             exit(1);
+//         }
+
+//         if ((pids[i] = fork()) == 0) {
+//             // hijo i
+//             close(pipes[i][0]);    // cierra lectura
+//             uint64_t total_i = 0;
+//             char buf[DATA_BUFFER_SIZE];
+//             struct timeval start, now;
+//             gettimeofday(&start, NULL);
+
+//             while (1) {
+//                 gettimeofday(&now, NULL);
+//                 double elapsed = (now.tv_sec  - start.tv_sec)
+//                                + (now.tv_usec - start.tv_usec) / 1e6;
+//                 if (elapsed >= T) break;
+
+//                 ssize_t n = recv(sock, buf, sizeof(buf), 0);
+//                 if (n <= 0) break;
+//                 total_i += n;
+//             }
+
+//             // escribe al padre
+//             if (write(pipes[i][1], &total_i, sizeof(total_i)) < 0)
+//                 perror("write pipe");
+//             close(pipes[i][1]);
+//             close(sock);
+//             exit(0);
+//         } else {
+//             // padre
+//             close(pipes[i][1]);   // cierra escritura
+//             close(sock);          // padre no usa este socket
+//         }
+//     }
+
+//     // El padre mide el tiempo total
+//     struct timeval start_all, end_all;
+//     gettimeofday(&start_all, NULL);
+
+//     for (int i = 0; i < num_conn; i++) {
+//         waitpid(pids[i], NULL, 0);
+//     }
+
+//     gettimeofday(&end_all, NULL);
+//     double elapsed = (end_all.tv_sec  - start_all.tv_sec)
+//                    + (end_all.tv_usec - start_all.tv_usec) / 1e6;
+
+//     // Suma los bytes llegados de cada hijo
+//     uint64_t total = 0;
+//     for (int i = 0; i < num_conn; i++) {
+//         uint64_t part = 0;
+//         if (read(pipes[i][0], &part, sizeof(part)) < 0)
+//             perror("read pipe");
+//         close(pipes[i][0]);
+//         total += part;
+//     }
+
+//     //obtener src_ip de la conexión
+//     {
+//       int tmp = socket(AF_INET, SOCK_STREAM, 0);
+//       struct sockaddr_in local;
+//       socklen_t len = sizeof(local);
+//       connect(tmp, (struct sockaddr*)&server, addr_len);
+//       getsockname(tmp, (struct sockaddr*)&local, &len);
+//       inet_ntop(AF_INET, &local.sin_addr, src_ip, INET_ADDRSTRLEN);
+//       close(tmp);
+//     }
+
+//     printf("[✓] Descarga total: %lu bytes en %.3f s\n", total, elapsed);
+//     return (double)total * 8.0 / elapsed;  // bps reales
+// }
+
 double download_test(const char *server_ip, char *src_ip, int num_conn) {
     int pipes[num_conn][2];
     pid_t pids[num_conn];
@@ -156,20 +275,13 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
             close(pipes[i][0]);    // cierra lectura
             uint64_t total_i = 0;
             char buf[DATA_BUFFER_SIZE];
-            struct timeval start, now;
+            struct timeval start;
             gettimeofday(&start, NULL);
-
-            while (1) {
-                gettimeofday(&now, NULL);
-                double elapsed = (now.tv_sec  - start.tv_sec)
-                               + (now.tv_usec - start.tv_usec) / 1e6;
-                if (elapsed >= T) break;
-
-                ssize_t n = recv(sock, buf, sizeof(buf), 0);
-                if (n <= 0) break;
+            
+            ssize_t n;
+            while ((n = recv(sock, buf, sizeof(buf), 0)) > 0) {
                 total_i += n;
             }
-
             // escribe al padre
             if (write(pipes[i][1], &total_i, sizeof(total_i)) < 0)
                 perror("write pipe");
@@ -220,11 +332,9 @@ double download_test(const char *server_ip, char *src_ip, int num_conn) {
     return (double)total * 8.0 / elapsed;  // bps reales
 }
 
-
 void upload_test(const char *server_ip, uint32_t id, int num_conn) {
     char payload[DATA_BUFFER_SIZE];
     memset(payload, 'U', DATA_BUFFER_SIZE);
-    
 
     for (int i = 0; i < num_conn; i++) {
         pid_t pid = fork();
@@ -260,7 +370,7 @@ void upload_test(const char *server_ip, uint32_t id, int num_conn) {
     printf("[✓] Upload terminado\n");
 }
 
-void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result, int num_conn) {
+void query_results_from_server(const char *ip, int udp_port, uint32_t id_measurement, struct BW_result *out_result, int num_conn) {
     struct sockaddr_in servaddr;
     int sockfd;
     socklen_t len;
@@ -302,7 +412,7 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
         return;
     }
 
-    // por ahora imprimir para verificar
+    //imprimir para verificar
     printf("Resultados de medición ID %u:\n", out_result->id_measurement);
     for (int i = 0; i < num_conn; i++) {
         if (out_result->conn_duration[i] > 0) {
@@ -314,8 +424,7 @@ void consultar_resultados(const char *ip, int udp_port, uint32_t id_measurement,
     close(sockfd);
 }
 
-
-void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip, int num_conn) {    
+void export_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip, int num_conn, const char *ip_hostremoto, int json_port) {  
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     char timestamp[20]; // "YYYY-MM-DD HH:MM:SS" son 19 + '\0'
@@ -360,8 +469,8 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
 
     struct sockaddr_in dest;
     dest.sin_family = AF_INET;
-    dest.sin_port = htons(JSON_PORT); //longstash port 
-    if (inet_pton(AF_INET, dst_ip, &dest.sin_addr) <= 0) {
+    dest.sin_port = htons(json_port);
+    if (inet_pton(AF_INET, ip_hostremoto, &dest.sin_addr) <= 0) {
         perror("inet_pton JSON");
         close(sock);
         return;
@@ -370,7 +479,7 @@ void exportar_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle, double rtt
     if (sendto(sock, json_buffer, len, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
         perror("sendto JSON");
     } else {
-        printf("[✓] JSON enviado a %s:%d\n", dst_ip, PORT_DOWNLOAD);
+        printf("[✓] JSON enviado a %s:%d\n", ip_hostremoto, PORT_DOWNLOAD);
     }
     close(sock);
 }

@@ -1,8 +1,7 @@
 
 #include "server_funcs.h"
 
-int main() {
-    signal(SIGPIPE, SIG_IGN); //ver de arreglar si se puede 
+int main() { 
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 
@@ -52,7 +51,6 @@ int main() {
     printf("[+] Servidor iniciado. Escuchando TCP y UDP...\n");
 
     // Loop de aceptación de conexiones
-    // tiene que cortar? es decir el server siempre espera?
     while (1) {
         fd_set read_fds;
         FD_ZERO(&read_fds);

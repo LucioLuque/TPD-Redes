@@ -74,6 +74,7 @@ Podés desactivar alguna pasando argumentos específicos al ejecutar el comando.
 | `-download`  | Ejecutar prueba de descarga                           | `true`                 |
 | `-upload`    | Ejecutar prueba de subida                             | `true`                 |
 | `-json`      | Enviar resultados en formato JSON                     | `true`                 |
+| `-ip`        | IP del servidor                                       | IP del servidor (local host)|        |
 | `-ip_hostremoto`| IP de destino para enviar el JSON                     | IP del servidor        |
 | `-port_host`  | Puerto para el envío del JSON                         | `9999` (puerto Logstash) |
 | `-h`         | Mostrar mensaje de ayuda y salir                     | -                      |

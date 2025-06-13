@@ -2,7 +2,8 @@
 #include "server_funcs.h"
 
 int main() {
-    signal(SIGPIPE, SIG_IGN); //ver de arreglar si se puede 
+    // Configuración del servidor
+    signal(SIGPIPE, SIG_IGN); 
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 
@@ -19,7 +20,7 @@ int main() {
     }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY; // lo estamos ahciendo de otra manera a ellos
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
     // TCP Download
     server_addr.sin_port = htons(PORT_DOWNLOAD);

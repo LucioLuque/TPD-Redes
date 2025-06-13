@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     uint32_t id = 0;
     
     if (idle) {
-        // Paso 1: medir latencia antes de todo (fase idle)
+        // Paso 1: medir latencia (fase idle)
         rtt_idle = rtt_test(ip_servidor, "idle");
         if (rtt_idle < 0) {
             fprintf(stderr, "[X] Abortando.\n");
@@ -53,8 +53,8 @@ int main(int argc, char *argv[]) {
 
         // Paso 4: consultar resultados
         struct BW_result resultado;
-        sleep(1); // Esperar un segundo antes de consultar resultados xq 
-                // el upload puede tardar un poco en completarse
+        sleep(1); // Esperar un segundo antes de consultar resultados xq el upload puede tardar un poco en completarse
+
         query_results_from_server(ip_servidor, PORT_DOWNLOAD, id, &resultado, num_conn);
 
         // Calcular avg upload bps

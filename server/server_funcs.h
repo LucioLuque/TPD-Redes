@@ -40,4 +40,4 @@ void *udp_server_thread(void *arg);
 struct BW_result *get_or_create_result(uint32_t id_measurement, 
                                        const char *client_ip);
 
-#endif // SERVER_FUNCS_H
+#endif

@@ -30,4 +30,4 @@ void printBwResult(struct BW_result bw_result);
 int packResultPayload(struct BW_result bw_result, void *buffer, int buffer_size);
 int unpackResultPayload(struct BW_result *bw_result, void *buffer, int buffer_size);
 void hexdump(void *mem, unsigned int len);
-#endif // HANDLE_RESULT_H
+#endif

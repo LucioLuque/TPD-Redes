@@ -38,4 +38,4 @@ void export_json(uint64_t bw_down, uint64_t bw_up, double rtt_idle,
         double rtt_down, double rtt_up, const char *src_ip, const char *dst_ip,
         int num_conn, const char *ip_hostremoto, int json_port);
 
-#endif // CLIENT_FUNCS_H
+#endif

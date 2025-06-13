@@ -1,35 +1,33 @@
-
 #include "server_funcs.h"
-struct ResultEntry *results = NULL;
 
+struct ResultEntry *results = NULL;
 pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-struct BW_result *get_or_create_result(uint32_t id_measurement, 
-                                           const char *client_ip) {
-        pthread_mutex_lock(&results_mutex);
-        // buscar 
-        for (struct ResultEntry *r = results; r; r = r->next) {
-            if (r->result.id_measurement == id_measurement
-             && strcmp(r->client_ip, client_ip) == 0) {
-                pthread_mutex_unlock(&results_mutex);
-                return &r->result;
-            }
-        }
-        
-        struct ResultEntry *new = malloc(sizeof(*new));
-        if (!new) {
-            perror("malloc ResultEntry");
+struct BW_result *get_or_create_result(uint32_t id_measurement, const char *client_ip) {
+    pthread_mutex_lock(&results_mutex);
+    // buscar 
+    for (struct ResultEntry *r = results; r; r = r->next) {
+        if (r->result.id_measurement == id_measurement
+            && strcmp(r->client_ip, client_ip) == 0) {
             pthread_mutex_unlock(&results_mutex);
-            return NULL; // Error al crear nuevo resultado
+            return &r->result;
         }
-        strncpy(new->client_ip, client_ip, INET_ADDRSTRLEN - 1);
-        memset(&new->result, 0, sizeof(new->result)); // inicializar a cero
-        new->result.id_measurement = id_measurement; 
-        new->next = results;
-        results = new; 
-        pthread_mutex_unlock(&results_mutex);
-        return &new->result;
     }
+    
+    struct ResultEntry *new = malloc(sizeof(*new));
+    if (!new) {
+        perror("malloc ResultEntry");
+        pthread_mutex_unlock(&results_mutex);
+        return NULL; // Error al crear nuevo resultado
+    }
+    strncpy(new->client_ip, client_ip, INET_ADDRSTRLEN - 1);
+    memset(&new->result, 0, sizeof(new->result)); // inicializar a cero
+    new->result.id_measurement = id_measurement; 
+    new->next = results;
+    results = new; 
+    pthread_mutex_unlock(&results_mutex);
+    return &new->result;
+}
 
 void *handle_download_conn(void *arg) {
     struct thread_arg_t *args = arg;
@@ -137,7 +135,7 @@ void *handle_upload_conn(void *arg) {
     }
     uint32_t id_measurement;
     memcpy(&id_measurement, header, 4);
-    id_measurement = ntohl(id_measurement);
+    id_measurement = ntohl(id_measurement); 
     uint16_t id_conn = (header[4] << 8) | header[5];
 
     struct BW_result *res = get_or_create_result(id_measurement, client_ip);
@@ -242,7 +240,7 @@ void *udp_server_thread(void *arg) {
             continue;
         }
 
-        //cualquier otro caso es invalido
+        //cualquier otro caso es inválido
         fprintf(stderr,
         "[!] UDP inválido: largo=%d, primer_byte=0x%02x\n", n, (n>0 ? (unsigned char)buffer[0] : 0));
         

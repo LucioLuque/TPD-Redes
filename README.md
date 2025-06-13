@@ -11,6 +11,9 @@ Una terminal funcionará como **servidor** y las demás como **clientes**.
 Antes de correr el servidor o los clientes, genera los ejecutables usando Make:
 
 ```bash
+# Entrar a la carpeta donde se encuentra el Makefile
+cd executables
+
 # Compila ambos binarios (server y client)
 make
 

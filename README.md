@@ -22,7 +22,7 @@ make client
 
 # Elimina los binarios compilados
 make clean
-
+```
 
 ## 🖥️ Servidor
 

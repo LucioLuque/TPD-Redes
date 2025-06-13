@@ -1,7 +1,6 @@
 CC      := gcc
 CFLAGS  := -Wall -Wextra -I../common
 
-# Source sets
 SERVER_SRCS := ../common/handle_result.c \
                ../server/server_funcs.c \
                ../server/server.c

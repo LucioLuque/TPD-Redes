@@ -101,7 +101,6 @@ void *handle_download_conn(void *arg) {
                 client_closed = true;
                 break;
             }
-            
         }
     }
 

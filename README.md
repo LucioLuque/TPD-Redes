@@ -6,6 +6,24 @@ Abrir al menos **dos terminales en paralelo**. Pueden estar en la misma computad
 
 Una terminal funcionará como **servidor** y las demás como **clientes**.
 
+## 🛠️ Compilación con Makefile
+
+Antes de correr el servidor o los clientes, genera los ejecutables usando Make:
+
+```bash
+# Compila ambos binarios (server y client)
+make
+
+# Compila solo el servidor
+make server
+
+# Compila solo el cliente
+make client
+
+# Elimina los binarios compilados
+make clean
+
+
 ## 🖥️ Servidor
 
 En la terminal del servidor:
@@ -74,5 +92,4 @@ El servidor se puede detener manualmente con `Ctrl+C` cuando ya no se esperen m�
 
 ## 📝 Notas finales
 
-- Asegurarse de que todos los ejecutables estén dentro de la carpeta `executables`.
 - Verificar que no haya firewalls ni configuraciones de red que bloqueen las conexiones.

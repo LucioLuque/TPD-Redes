@@ -11,7 +11,6 @@ void printBwResult(struct BW_result bw_result) {
   }
 }
 
-
 int packResultPayload(struct BW_result bw_result, void *buffer, int buffer_size) {
 
   int bytes_temp_buffer = 0;
@@ -132,8 +131,6 @@ int unpackResultPayload(struct BW_result *bw_result, void *buffer, int buffer_si
   
   return offset; // Return total bytes consumed
 }
-
-
 
 // http://grapsus.net/blog/post/Hexadecimal-dump-in-C
 void hexdump(void *mem, unsigned int len)

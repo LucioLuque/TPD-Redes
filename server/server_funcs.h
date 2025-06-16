@@ -27,6 +27,13 @@ struct ResultEntry {
     struct ResultEntry *next;
 };
 
+struct BW_result {
+  uint32_t id_measurement;
+  uint64_t conn_bytes[NUM_CONN_MAX];
+  double conn_duration[NUM_CONN_MAX];
+};
+
+
 struct thread_arg_t {
     int client_sock;
     struct sockaddr_in client_addr;

@@ -3,7 +3,7 @@
 
 int main() {
     // Configuración del servidor
-    signal(SIGPIPE, SIG_IGN); 
+    signal(SIGPIPE, SIG_IGN);
     int tcp_sock_down, tcp_sock_up;
     struct sockaddr_in server_addr;
 

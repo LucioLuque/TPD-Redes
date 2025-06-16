@@ -159,7 +159,6 @@ double download_test(const char *server_ip, char *src_ip, int num_conn, double *
     struct sockaddr_in server;
     socklen_t addr_len = sizeof(server);
 
-        
     int pipe_rtt[2];
     if (pipe(pipe_rtt)<0) {perror("pipe RTT"); exit(1); }
     

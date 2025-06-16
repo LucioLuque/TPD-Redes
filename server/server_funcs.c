@@ -170,6 +170,7 @@ void *udp_server_thread(void *arg) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in serv, client;
     socklen_t len = sizeof(client);
+    
     char buffer[DATA_BUFFER_SIZE];
     bool found;
     struct BW_result tmp_result;
